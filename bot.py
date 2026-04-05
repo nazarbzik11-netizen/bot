@@ -12,6 +12,7 @@ import shutil
 from pathlib import Path
 from itertools import cycle
 from datetime import datetime, timezone
+from aiohttp import web
 
 # ---------- НАЛАШТУВАННЯ ----------
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -2065,6 +2066,79 @@ async def on_raw_reaction_add(payload):
         except Exception as e:
             print(f"Error removing reaction: {e}")
 
+# ====================================================================
+# 🌐 WEBHOOK СЕРВЕР ДЛЯ NEWSKY (ПРИЙОМ ЗАЯВОК)
+# ====================================================================
+async def newsky_webhook(request):
+    try:
+        data = await request.json()
+        print(f"📥 [WEBHOOK DATA]: {data}") # Лог для перевірки ключів!
+
+        channel = client.get_channel(CHANNEL_ID) # Тут має бути ID твого каналу
+        if not channel:
+            return web.Response(text="Channel not found", status=500)
+
+        # 1. Якщо Newsky надсилає вже готовий дизайн Discord
+        if "embeds" in data and len(data["embeds"]) > 0:
+            embed = discord.Embed.from_dict(data["embeds"][0])
+            await channel.send(embed=embed)
+            return web.Response(text="OK", status=200)
+
+        # 2. Якщо потрібно зібрати дизайн самостійно
+        pilot_data = data.get("pilot", {})
+        pilot_name = pilot_data.get("fullname") or pilot_data.get("username") or "Unknown Pilot"
+        
+        embed = discord.Embed(
+            title=f"👋 Pilot application: {pilot_name}",
+            color=0x2b5293 
+        )
+
+        flights = pilot_data.get("flights", 0)
+        hours = pilot_data.get("hours", 0.0)
+        rating = pilot_data.get("rating", 0.0)
+        embed.description = f"🔢 **{flights} flights** ㅤ ⏱️ **{hours}h** ㅤ 🟩 **{rating}**\n"
+
+        # Літаки (динамічно)
+        aircraft_list = pilot_data.get("most_active_aircraft", []) 
+        if aircraft_list:
+            embed.add_field(name="\u200b\n✈️ Most active on type:", value="", inline=False)
+            for ac in aircraft_list[:3]:
+                ac_type = ac.get("type", "Unknown")
+                ac_flights = ac.get("flights", 0)
+                ac_rating = ac.get("rating", 0.0)
+                embed.add_field(name=ac_type, value=f"*flights:* {ac_flights}\n*rating:* {ac_rating}", inline=True)
+
+        # Компанії (динамічно)
+        airlines_list = pilot_data.get("previous_employment", [])
+        if airlines_list:
+            embed.add_field(name="\u200b\n💺 Previous employment:", value="", inline=False)
+            for airline in airlines_list[:3]:
+                al_name = airline.get("name", airline.get("airline", "Unknown Airline"))
+                al_flights = airline.get("flights", 0)
+                al_rating = airline.get("rating", 0.0)
+                embed.add_field(name=al_name, value=f"*flights:* {al_flights}\n*rating:* {al_rating}", inline=False)
+
+        await channel.send(embed=embed)
+        return web.Response(text="OK", status=200)
+
+    except Exception as e:
+        print(f"❌ Webhook Error: {e}")
+        return web.Response(text="Error", status=500)
+
+async def start_web_server():
+    app = web.Application()
+    app.add_routes([web.post('/webhook', newsky_webhook)])
+    
+    runner = web.AppRunner(app)
+    await runner.setup()
+    
+    import os
+    port = int(os.getenv("PORT", 8080))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    print(f"🌐 Web-сервер успішно запущено на порту {port}! (Шлях: /webhook)")
+# ====================================================================
+
 # --- 🚀 ЗАПУСК ГОЛОВНОГО ЦИКЛУ ---
 @client.event
 async def on_ready():
@@ -2076,5 +2150,6 @@ async def on_ready():
     print("🚀 MONITORING STARTED")
     client.loop.create_task(status_loop())
     client.loop.create_task(main_loop())
+	client.loop.create_task(start_web_server())
 
 client.run(DISCORD_TOKEN)
