@@ -2150,6 +2150,6 @@ async def on_ready():
     print("🚀 MONITORING STARTED")
     client.loop.create_task(status_loop())
     client.loop.create_task(main_loop())
-	client.loop.create_task(start_web_server())
+    client.loop.create_task(start_web_server()) # Тепер тут
 
 client.run(DISCORD_TOKEN)
