@@ -830,9 +830,11 @@ async def on_message(message):
         if not main_channel: return await message.channel.send("❌ Помилка: Не можу знайти сервер. Перевір CHANNEL_ID.")
         guild = main_channel.guild
 
-        # Шукаємо тебе на сервері
-        member = guild.get_member(message.author.id)
-        if not member: return await message.channel.send("❌ Помилка: Я не бачу тебе на сервері.")
+        # Шукаємо тебе на сервері (прямий запит)
+        try:
+            member = await guild.fetch_member(message.author.id)
+        except discord.NotFound:
+            return await message.channel.send("❌ Помилка: Я дійсно не бачу тебе на сервері.")
 
         role_name = "Test"
         try:
