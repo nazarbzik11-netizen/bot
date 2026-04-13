@@ -685,7 +685,7 @@ async def send_flight_message(channel, status, f, details_type="ongoing", reply_
             rating_str = "💀 **CRASH**"
             time_info_str = "" 
         
-        elif f.get("emergency") is True or (raw_balance == 0 and dist > 1):
+        elif f.get("emergency") is True:
             title_text = f"{type_emoji} ⚠️ {full_cs} EMERGENCY"
             color_code = 0xe67e22 
             rating_str = "🟥 **EMEG**"
