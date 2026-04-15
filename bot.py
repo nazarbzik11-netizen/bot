@@ -477,7 +477,7 @@ def get_landing_data(f, details_type):
     if details_type == "test":
         fpm = -random.randint(50, 400)
         g = round(random.uniform(0.9, 1.8), 2)
-        return f"📉 **{fpm} fpm**, **{g} G**\n💨 **220° | 3 kt** (crosswind: 2 kt)"
+        return f"📉 **{fpm} fpm**, **{g} G**\n<:wind:1482073151071326229> **220° | 8 kt** (Crosswind: 3 kt | Tailwind: 5 kt)"
 
     fpm, g_force, found = 0, 0.0, False
     weather = {}
@@ -515,11 +515,16 @@ def get_landing_data(f, details_type):
             w_dir = int(round(weather.get("windDir", 0)))
             w_spd = int(round(weather.get("windSpd", 0)))
             w_x = int(round(abs(weather.get("windX", 0))))
+            w_z = weather.get("windZ", 0)
             
             if w_dir == 0 and w_spd > 0: 
                 w_dir = 360
                 
-            wind_str = f"\n<:wind:1482073151071326229> **{w_dir}° | {w_spd} kt** (crosswind: {w_x} kt)"
+            tw_str = ""
+            if w_z < -0.5:
+                tw_str = f" | Tailwind: {int(round(abs(w_z)))} kt"
+                
+            wind_str = f"\n<:wind:1482073151071326229> **{w_dir}° | {w_spd} kt** (Crosswind: {w_x} kt{tw_str})"
             
         return f"📉 **{fpm_val} fpm**{g_str}{wind_str}"
     
