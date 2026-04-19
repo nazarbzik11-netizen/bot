@@ -680,13 +680,19 @@ async def send_flight_message(channel, status, f, details_type="ongoing", reply_
         
         check_g = 0.0
         check_fpm = 0
+        has_crash_title = False # 🔴 НОВА ЗМІННА: Шукаємо краш у тексті
+        
         if "result" in f and "violations" in f["result"]:
             for v in f["result"]["violations"]:
+                # Перевіряємо наявність базової фрази крашу
+                if "Crashed on landing" in v.get("title", ""):
+                    has_crash_title = True
+                    
                 entry = v.get("entry", {}).get("payload", {}).get("touchDown", {})
-                if entry:
+                if entry and check_g == 0.0:
                     check_g = float(entry.get("gForce", 0))
                     check_fpm = int(entry.get("rate", 0))
-                    break 
+                    
         if check_g == 0 and "landing" in f:
             check_g = float(f["landing"].get("gForce", 0))
             check_fpm = int(f["landing"].get("rate", 0) or f["landing"].get("touchDownRate", 0))
@@ -695,8 +701,8 @@ async def send_flight_message(channel, status, f, details_type="ongoing", reply_
         color_code = 0x2ecc71
         rating_str = f"{get_rating_square(rating)} **{rating}**"
 
-        # 🔥 Перевірка на краш (3G або 2000fpm) має пріоритет над Emergency 🔥
-        is_hard_crash = abs(check_g) > 3.0 or abs(check_fpm) > 2000
+        # 🔥 Перевірка на краш (3G, 2000fpm АБО наявність фрази Crashed on landing) 🔥
+        is_hard_crash = abs(check_g) > 3.0 or abs(check_fpm) > 2000 or has_crash_title
         
         time_info_str = f"{get_timing(delay)}\n\n"
 
