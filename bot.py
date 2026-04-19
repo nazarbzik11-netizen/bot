@@ -94,8 +94,8 @@ def init_week_stats():
         "records": {
             "butter": {"fpm": -99999, "g": 0.0, "pilot": "None"},
             "hardest": {"fpm": 0, "g": 0.0, "pilot": "None"},
-            "longest": {"time": 0, "pilot": "None", "dep": "???", "arr": "???"},
-            "shortest": {"time": 99999, "pilot": "None", "dep": "???", "arr": "???"}
+            "longest": [],
+            "shortest": []
         }
     }
 
@@ -156,17 +156,17 @@ def update_weekly_stats(f, week_tag):
     if ac_icao != "Unknown":
         s["aircrafts"][ac_icao] = s["aircrafts"].get(ac_icao, 0) + 1
     
-    if fpm_val < 0 and fpm_val > s["records"]["butter"]["fpm"]:
-        s["records"]["butter"] = {"fpm": fpm_val, "g": check_g, "pilot": pilot}
-        
     if fpm_val < s["records"]["hardest"]["fpm"]:
         s["records"]["hardest"] = {"fpm": fpm_val, "g": check_g, "pilot": pilot}
         
-    if ftime > s["records"]["longest"]["time"]:
-        s["records"]["longest"] = {"time": ftime, "pilot": pilot, "dep": dep, "arr": arr}
+    if ftime > 0:
+        flight_rec = {"time": ftime, "pilot": pilot, "dep": dep, "arr": arr}
         
-    if ftime > 0 and ftime < s["records"]["shortest"]["time"]:
-        s["records"]["shortest"] = {"time": ftime, "pilot": pilot, "dep": dep, "arr": arr}
+        s["records"]["longest"].append(flight_rec)
+        s["records"]["longest"] = sorted(s["records"]["longest"], key=lambda x: x["time"], reverse=True)[:3]
+        
+        s["records"]["shortest"].append(flight_rec)
+        s["records"]["shortest"] = sorted(s["records"]["shortest"], key=lambda x: x["time"])[:3]
         
     save_weekly_stats(stats)
 
@@ -274,13 +274,27 @@ async def publish_weekly_embed(channel, week_tag, s):
     earn_val = s['earnings']
     sign = "+" if earn_val >= 0 else "-" 
     
-    l_dep = rec['longest'].get('dep', '???')
-    l_arr = rec['longest'].get('arr', '???')
-    l_route = f" ({get_flag(AIRPORTS_DB.get(l_dep, {}).get('country', 'XX'))} {l_dep} ➔ {get_flag(AIRPORTS_DB.get(l_arr, {}).get('country', 'XX'))} {l_arr})" if l_dep != "???" else ""
-    
-    s_dep = rec['shortest'].get('dep', '???')
-    s_arr = rec['shortest'].get('arr', '???')
-    s_route = f" ({get_flag(AIRPORTS_DB.get(s_dep, {}).get('country', 'XX'))} {s_dep} ➔ {get_flag(AIRPORTS_DB.get(s_arr, {}).get('country', 'XX'))} {s_arr})" if s_dep != "???" else ""
+    # --- БЛОК ДЛЯ ТОП-3 НАЙДОВШИХ ---
+    longest_str = ""
+    if not rec['longest']:
+        longest_str = "╰ None\n"
+    else:
+        for i, r in enumerate(rec['longest']):
+            l_dep = r.get('dep', '???')
+            l_arr = r.get('arr', '???')
+            l_route = f" ({get_flag(AIRPORTS_DB.get(l_dep, {}).get('country', 'XX'))} {l_dep} ➔ {get_flag(AIRPORTS_DB.get(l_arr, {}).get('country', 'XX'))} {l_arr})" if l_dep != "???" else ""
+            longest_str += f"╰ {medals[i] if i < 3 else '🔹'} {format_duration(r['time'])} — **{r.get('pilot', 'Unknown')}**{l_route}\n"
+
+    # --- БЛОК ДЛЯ ТОП-3 НАЙКОРОТШИХ ---
+    shortest_str = ""
+    if not rec['shortest']:
+        shortest_str = "╰ None\n"
+    else:
+        for i, r in enumerate(rec['shortest']):
+            s_dep = r.get('dep', '???')
+            s_arr = r.get('arr', '???')
+            s_route = f" ({get_flag(AIRPORTS_DB.get(s_dep, {}).get('country', 'XX'))} {s_dep} ➔ {get_flag(AIRPORTS_DB.get(s_arr, {}).get('country', 'XX'))} {s_arr})" if s_dep != "???" else ""
+            shortest_str += f"╰ {medals[i] if i < 3 else '🔹'} {format_duration(r['time'])} — **{r.get('pilot', 'Unknown')}**{s_route}\n"
     
     desc = (
         f"### 📈 General Statistics\n"
@@ -299,11 +313,11 @@ async def publish_weekly_embed(channel, week_tag, s):
         f"🛬 **Hardest Landing:**\n"
         f"╰ {rec['hardest']['pilot']} ({rec['hardest']['fpm']} fpm, {rec['hardest']['g']} G)\n\n"
         
-        f"🐢 **Longest Flight:**\n"
-        f"╰ {format_duration(rec['longest']['time'])} — {rec['longest']['pilot']}{l_route}\n\n"
+        f"🐢 **Longest Flights:**\n"
+        f"{longest_str}\n"
         
-        f"🚀 **Shortest Flight:**\n"
-        f"╰ {format_duration(rec['shortest']['time'])} — {rec['shortest']['pilot']}{s_route}\n\n"
+        f"🚀 **Shortest Flights:**\n"
+        f"{shortest_str}\n"
         
         f"### ⭐ Company Averages\n"
         f"📊 **Average Rating:** {avg_rating}\n"
@@ -859,25 +873,45 @@ async def on_message(message):
     if message.content == "!teststatstest":
         if not is_admin: return await message.channel.send("🚫 **Access Denied**")
         
-        await message.channel.send("🛠️ **Generating presentation report (Fake Data)...**")
+        await message.channel.send("🛠️ **Generating presentation report (Randomized Fake Data)...**")
         
+        # Рандомні базові значення
+        f_count = random.randint(80, 200)
+        
+        # Допоміжна функція для генерації випадкових рейсів (ТОП-3)
+        def gen_random_flights(time_min, time_max):
+            apts = ["UKBB", "UKLL", "UKOO", "UKLU", "EPWA", "LOWW", "KJFK", "LTFM", "EDDF"]
+            return [
+                {
+                    "time": random.randint(time_min, time_max),
+                    "pilot": f"Pilot {random.choice(['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo'])}",
+                    "dep": random.choice(apts),
+                    "arr": random.choice(apts)
+                } for _ in range(3)
+            ]
+
         # Генеруємо красиві штучні дані
         dummy_s = {
-            "flights": 124, 
-            "earnings": 1450800, 
-            "pax": 18500, 
-            "cargo": 45000,
-            "rating_sum": 1215.2, # 1215.2 / 124 = 9.8 avg
-            "fpm_sum": -21080,    # -21080 / 124 = -170 fpm avg
-            "g_sum": 142.6,       # 142.6 / 124 = 1.15 G avg
-            "pilots": {"Pilot Name": 54, "Pilot Name": 40, "Pilot Name": 30},
-            "airports": {"UKBB": 80, "LOWW": 24, "KJFK": 20},
-            "aircrafts": {"B738": 90, "A320": 34},
+            "flights": f_count, 
+            "earnings": f_count * random.randint(8000, 20000), 
+            "pax": f_count * random.randint(120, 250), 
+            "cargo": f_count * random.randint(1500, 5000),
+            
+            "rating_sum": f_count * random.uniform(9.0, 9.9), 
+            "fpm_sum": f_count * random.randint(-350, -150),    
+            "g_sum": f_count * random.uniform(1.05, 1.25),      
+            
+            "pilots": {f"Capt. {name}": random.randint(10, 40) for name in ["Shevchenko", "Kovalenko", "Boyko"]},
+            "airports": {apt: random.randint(15, 60) for apt in ["UKBB", "UKLL", "LOWW"]},
+            "aircrafts": {ac: random.randint(20, 70) for ac in ["B738", "A320", "B77W"]},
+            
             "records": {
-                "butter": {"fpm": -45, "g": 1.02, "pilot": "Pilot Name"},
-                "hardest": {"fpm": -650, "g": 1.85, "pilot": "Pilot Name"},
-                "longest": {"time": 540, "pilot": "Pilot Name", "dep": "UKBB", "arr": "KJFK"},
-                "shortest": {"time": 35, "pilot": "Pilot Name", "dep": "UKBB", "arr": "UKLL"}
+                "butter": {"fpm": random.randint(-60, -10), "g": round(random.uniform(1.0, 1.05), 2), "pilot": "Capt. Silk"},
+                "hardest": {"fpm": random.randint(-800, -500), "g": round(random.uniform(1.6, 2.2), 2), "pilot": "Capt. Ryan"},
+                
+                # Рандомні списки для ТОП-3 (відсортовані)
+                "longest": sorted(gen_random_flights(400, 700), key=lambda x: x["time"], reverse=True),
+                "shortest": sorted(gen_random_flights(25, 60), key=lambda x: x["time"])
             }
         }
         
