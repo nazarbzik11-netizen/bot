@@ -158,7 +158,7 @@ def update_weekly_stats(f, week_tag):
     
     if fpm_val < s["records"]["hardest"]["fpm"]:
         s["records"]["hardest"] = {"fpm": fpm_val, "g": check_g, "pilot": pilot}
-	if fpm_val < 0 and fpm_val > s["records"]["butter"]["fpm"]:
+    if fpm_val < 0 and fpm_val > s["records"]["butter"]["fpm"]:
         s["records"]["butter"] = {"fpm": fpm_val, "g": check_g, "pilot": pilot}
         
     if ftime > 0:
