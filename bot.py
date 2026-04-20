@@ -125,20 +125,26 @@ def update_weekly_stats(f, week_tag):
     ac_icao = "Unknown"
     if isinstance(ac_data, dict):
         ac_icao = ac_data.get("icao") or ac_data.get("airframe", {}).get("icao") or "Unknown"
-    
     check_g, check_fpm = 0.0, 0
+    has_crash_title = False
+
     if "result" in f and "violations" in f["result"]:
         for v in f["result"]["violations"]:
+            if "Crashed on landing" in v.get("title", ""):
+                has_crash_title = True
+                
             entry = v.get("entry", {}).get("payload", {}).get("touchDown", {})
-            if entry:
+            if entry and check_g == 0.0:
                 check_g = float(entry.get("gForce", 0))
                 check_fpm = int(entry.get("rate", 0))
-                break 
+
     if check_g == 0 and "landing" in f:
         check_g = float(f.get("landing", {}).get("gForce", 0))
         check_fpm = int(f.get("landing", {}).get("rate", 0) or f.get("landing", {}).get("touchDownRate", 0))
         
     fpm_val = -abs(check_fpm) if check_fpm != 0 else 0
+    
+    is_hard_crash = abs(check_g) > 3.0 or abs(check_fpm) > 2000 or has_crash_title
     
     s["flights"] += 1
     s["earnings"] += balance
@@ -156,20 +162,21 @@ def update_weekly_stats(f, week_tag):
     if ac_icao != "Unknown":
         s["aircrafts"][ac_icao] = s["aircrafts"].get(ac_icao, 0) + 1
     
-    if fpm_val < s["records"]["hardest"]["fpm"]:
-        s["records"]["hardest"] = {"fpm": fpm_val, "g": check_g, "pilot": pilot}
-    if fpm_val < 0 and fpm_val > s["records"]["butter"]["fpm"]:
-        s["records"]["butter"] = {"fpm": fpm_val, "g": check_g, "pilot": pilot}
-        
-    if ftime > 0:
-        flight_rec = {"time": ftime, "pilot": pilot, "dep": dep, "arr": arr}
-        
-        s["records"]["longest"].append(flight_rec)
-        s["records"]["longest"] = sorted(s["records"]["longest"], key=lambda x: x["time"], reverse=True)[:3]
-        
-        s["records"]["shortest"].append(flight_rec)
-        s["records"]["shortest"] = sorted(s["records"]["shortest"], key=lambda x: x["time"])[:3]
-        
+    if not is_hard_crash:
+        if fpm_val < s["records"]["hardest"]["fpm"]:
+            s["records"]["hardest"] = {"fpm": fpm_val, "g": check_g, "pilot": pilot}
+        if fpm_val < 0 and fpm_val > s["records"]["butter"]["fpm"]:
+            s["records"]["butter"] = {"fpm": fpm_val, "g": check_g, "pilot": pilot}
+            
+        if ftime > 0:
+            flight_rec = {"time": ftime, "pilot": pilot, "dep": dep, "arr": arr}
+            
+            s["records"]["longest"].append(flight_rec)
+            s["records"]["longest"] = sorted(s["records"]["longest"], key=lambda x: x["time"], reverse=True)[:3]
+            
+            s["records"]["shortest"].append(flight_rec)
+            s["records"]["shortest"] = sorted(s["records"]["shortest"], key=lambda x: x["time"])[:3]
+            
     save_weekly_stats(stats)
 
 async def check_and_publish_weekly_stats(channel, state, ongoing_ids):
