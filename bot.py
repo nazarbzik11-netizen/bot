@@ -2360,7 +2360,7 @@ async def update_github_demand_task():
             new_content_b64 = base64.b64encode(new_content.encode('utf-8')).decode('utf-8')
             
             push_payload = {
-                "message": "🤖 Авто-оновлення попиту з Railway (10 хв)",
+                "message": "🤖 Auto update",
                 "content": new_content_b64,
                 "sha": file_sha # Вказуємо, яку саме версію файлу ми замінюємо
             }
