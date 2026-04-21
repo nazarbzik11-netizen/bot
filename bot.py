@@ -9,6 +9,7 @@ import random
 import io
 import time
 import shutil
+import base64
 from pathlib import Path
 from itertools import cycle
 from datetime import datetime, timezone, timedelta
@@ -18,6 +19,10 @@ from aiohttp import web
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID")) if os.getenv("CHANNEL_ID") else 0
 NEWSKY_API_KEY = os.getenv("NEWSKY_API_KEY")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+NEWSKY_SID = os.getenv("NEWSKY_SID")
+GITHUB_REPO = "nazarbzik11-netizen/testbot"
+GITHUB_FILE_PATH = "newsky-airports.txt"
 
 ADMIN_IDS = [
     598767470140063744,
@@ -2264,12 +2269,100 @@ async def start_web_server():
     print(f"🌐 Web-сервер успішно запущено на порту {port}! (Шлях: /webhook)")
 # ====================================================================
 
+@tasks.loop(minutes=10)
+async def update_github_demand_task():
+    if not GITHUB_TOKEN or not NEWSKY_SID:
+        print("⚠️ Немає токенів для GitHub або Newsky. Пропускаю оновлення файлу.")
+        return
+
+    print("🚀 Починаємо оновлення файлу newsky-airports.txt через GitHub API...")
+    github_api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE_PATH}"
+    gh_headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+
+    async with aiohttp.ClientSession() as session:
+        # 1. Завантажуємо поточний файл з GitHub (щоб дістати ICAO і ключ SHA)
+        async with session.get(github_api_url, headers=gh_headers) as resp:
+            if resp.status != 200:
+                print(f"❌ Помилка завантаження файлу з GitHub: {resp.status}")
+                return
+            gh_data = await resp.json()
+            file_sha = gh_data['sha'] # Ключ, який дозволяє перезаписати файл
+            file_content_b64 = gh_data['content']
+            old_text = base64.b64decode(file_content_b64).decode('utf-8')
+
+        # 2. Парсимо ICAO зі старого тексту (як у твоєму скрипті)
+        icaos = []
+        for line in old_text.splitlines():
+            line = line.strip()
+            if line.startswith("{") and line.endswith("}"):
+                try:
+                    data = json.loads(line)
+                    if "icao" in data:
+                        icaos.append(data["icao"])
+                except:
+                    continue
+
+        if not icaos:
+            print("❌ Не знайдено ICAO у файлі!")
+            return
+
+        # 3. Збираємо свіжі дані з Newsky
+        fresh_data = []
+        ns_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Cookie": f"sid={NEWSKY_SID}" if not NEWSKY_SID.startswith("sid=") else NEWSKY_SID,
+            "Accept": "application/json"
+        }
+
+        for icao in icaos:
+            ns_url = f"https://newsky.app/api/airport/{icao}"
+            try:
+                async with session.get(ns_url, headers=ns_headers, timeout=10) as ns_resp:
+                    if ns_resp.status == 200:
+                        data = await ns_resp.json()
+                        # Форматування з пробілами (separators), рівно як у тебе
+                        formatted_line = json.dumps(data, ensure_ascii=False, separators=(', ', ': '))
+                        fresh_data.append(formatted_line)
+                    else:
+                        print(f"❌ {icao} - Помилка {ns_resp.status}")
+            except Exception as e:
+                print(f"❌ {icao} - Помилка з'єднання: {e}")
+            
+            # Асинхронна пауза, щоб не блокувати бота
+            await asyncio.sleep(0.5)
+
+        # 4. Формуємо новий текст і пушимо на GitHub
+        if fresh_data:
+            now_str = datetime.now().strftime("%d.%m.%Y %H:%M")
+            new_content = f"UPDATED: {now_str}\n\n" + "\n\n---\n\n".join(fresh_data)
+            
+            # GitHub API вимагає текст у форматі Base64
+            new_content_b64 = base64.b64encode(new_content.encode('utf-8')).decode('utf-8')
+            
+            push_payload = {
+                "message": "🤖 Авто-оновлення попиту з Railway (10 хв)",
+                "content": new_content_b64,
+                "sha": file_sha # Вказуємо, яку саме версію файлу ми замінюємо
+            }
+            
+            async with session.put(github_api_url, headers=gh_headers, json=push_payload) as put_resp:
+                if put_resp.status in [200, 201]:
+                    print(f"🎉 Файл на GitHub успішно оновлено о {now_str}!")
+                else:
+                    err_msg = await put_resp.text()
+                    print(f"❌ Помилка запису на GitHub: {err_msg}")
+
 # --- 🚀 ЗАПУСК ГОЛОВНОГО ЦИКЛУ ---
 @client.event
 async def on_ready():
     global MONITORING_STARTED
     if MONITORING_STARTED: return
     MONITORING_STARTED = True
+	if not update_github_demand_task.is_running():
+        update_github_demand_task.start()
     
     print(f"✅ Bot online: {client.user}")
     print("🚀 MONITORING STARTED")
