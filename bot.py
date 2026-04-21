@@ -927,6 +927,22 @@ async def on_message(message):
         return
     # -------------------------------------------------------------
 
+	# --- 🔄 КОМАНДА: !updatedemand (ПРИМУСОВЕ ОНОВЛЕННЯ GITHUB) ---
+    if message.content == "!updatedemand":
+        if not is_admin: 
+            return await message.channel.send("🚫 **Access Denied**")
+
+        status_msg = await message.channel.send("⏳ **Запускаю примусове оновлення `newsky-airports.txt` на GitHub...**")
+
+        try:
+            # Викликаємо базову асинхронну функцію таски напряму
+            await update_github_demand_task.coro()
+            await status_msg.edit(content="✅ **Примусове оновлення виконано!** Дані щойно були відправлені на GitHub. Зачекай хвилинку, поки оновиться сам сайт.")
+        except Exception as e:
+            await status_msg.edit(content=f"❌ **Сталася помилка під час примусового оновлення:** {e}")
+        return
+    # -------------------------------------------------------------
+
 # --- 🧪 КОМАНДА 1: !teststats (ЗІ ЗАКРІПЛЕННЯМ ТА ВІДКРІПЛЕННЯМ) ---
     if message.content == "!teststats":
         if not is_admin: return await message.channel.send("🚫 **Access Denied**")
