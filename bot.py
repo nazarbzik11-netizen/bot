@@ -22,7 +22,7 @@ CHANNEL_ID = int(os.getenv("CHANNEL_ID")) if os.getenv("CHANNEL_ID") else 0
 NEWSKY_API_KEY = os.getenv("NEWSKY_API_KEY")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 NEWSKY_SID = os.getenv("NEWSKY_SID")
-GITHUB_REPO = "nazarbzik11-netizen/testbot"
+GITHUB_REPO = "kazuar-avia/kazuar-avia.github.io"
 GITHUB_FILE_PATH = "newsky-airports.txt"
 
 ADMIN_IDS = [
@@ -2286,7 +2286,7 @@ async def start_web_server():
     print(f"🌐 Web-сервер успішно запущено на порту {port}! (Шлях: /webhook)")
 # ====================================================================
 
-@tasks.loop(minutes=10)
+@tasks.loop(minutes=60)
 async def update_github_demand_task():
     if not GITHUB_TOKEN or not NEWSKY_SID:
         print("⚠️ Немає токенів для GitHub або Newsky. Пропускаю оновлення файлу.")
