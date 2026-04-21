@@ -2377,13 +2377,14 @@ async def on_ready():
     global MONITORING_STARTED
     if MONITORING_STARTED: return
     MONITORING_STARTED = True
-	if not update_github_demand_task.is_running():
+    
+    if not update_github_demand_task.is_running():
         update_github_demand_task.start()
     
     print(f"✅ Bot online: {client.user}")
     print("🚀 MONITORING STARTED")
     client.loop.create_task(status_loop())
     client.loop.create_task(main_loop())
-    client.loop.create_task(start_web_server()) # Тепер тут
+    client.loop.create_task(start_web_server())
 
 client.run(DISCORD_TOKEN)
