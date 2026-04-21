@@ -14,6 +14,7 @@ from pathlib import Path
 from itertools import cycle
 from datetime import datetime, timezone, timedelta
 from aiohttp import web
+from discord.ext import tasks
 
 # ---------- НАЛАШТУВАННЯ ----------
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
