@@ -2353,7 +2353,7 @@ async def update_github_demand_task():
 
         # 4. Формуємо новий текст і пушимо на GitHub
         if fresh_data:
-            now_str = datetime.now().strftime("%d.%m.%Y %H:%M")
+            now_str = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M UTC")
             new_content = f"UPDATED: {now_str}\n\n" + "\n\n---\n\n".join(fresh_data)
             
             # GitHub API вимагає текст у форматі Base64
