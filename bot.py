@@ -1943,7 +1943,7 @@ async def on_message(message):
         return
     # -------------------------------------------------------------
 
-     # --- 📚 КОМАНДА: !help (ДИНАМІЧНА ДЛЯ КОРИСТУВАЧІВ, АДМІНІВ ТА ВЛАСНИКА) ---
+# --- 📚 КОМАНДА: !help (ДИНАМІЧНА ДЛЯ КОРИСТУВАЧІВ, АДМІНІВ ТА ВЛАСНИКА) ---
     if message.content == "!help":
         is_owner = message.author.id in ADMIN_IDS
         
@@ -1965,11 +1965,11 @@ async def on_message(message):
             desc += "**`!ban <ID> [reason]`** — Ban user on server\n"
             desc += "**`!unban <ID>`** — Unban user on server\n"
             desc += "**`!audit [all/num]`** — Download server audit log\n"
-	    desc += "**`!cache`** — Download bot memory (sent.json)\n"
-	    desc += "**`!spy <ID>`** — Dump raw flight JSON data\n"
-	    desc += "**`!stats`** — Download weekly_stats.json\n"
-	    desc += "**`!disk`** — Show server disk/memory usage\n"
-            desc += "**`!banlist`** — Download banned users list\n\n"
+            desc += "**`!cache`** — Download bot memory (sent.json)\n"
+            desc += "**`!spy <ID>`** — Dump raw flight JSON data\n"
+            desc += "**`!stats`** — Download weekly_stats.json\n"
+            desc += "**`!banlist`** — Download banned users list\n"
+            desc += "**`!disk`** — Show server disk/memory usage\n\n"
             
             desc += "**💬 Message & UI Management:**\n"
             desc += "**`!msg [ID] <text/pic>`** — Send text or image message\n"
@@ -1980,11 +1980,11 @@ async def on_message(message):
             desc += "**`!unpin <ID>`** — Unpin a message\n"
             desc += "**`!wow <ID> <emoji>`** — Add reaction to a message\n"
             desc += "**`!unwow <ID> <emoji>`** — Remove reaction\n"
-	    desc += "**`!teststatspin`** — Generate weekly report (PINS message)\n"
-	    desc += "**`!teststats`** — Generate weekly report (NO pin)\n"
+            desc += "**`!teststatspin`** — Generate weekly report (PINS message)\n"
+            desc += "**`!teststats`** — Generate weekly report (NO pin)\n"
             desc += "**`!teststatstest`** — Generate presentation report (Fake Data)\n"
-	    desc += "**`!addflight <ID>`** — Force add missed flight to stats\n"
-	    desc += "**`!clearstats`** — Wipe all weekly stats data\n"
+            desc += "**`!addflight <ID>`** — Force add missed flight to stats\n"
+            desc += "**`!clearstats`** — Wipe all weekly stats data\n"
             desc += "**`!idemoji <name>`** — Get code for a custom server emoji\n\n"
             
             desc += "**🎭 Status Management:**\n"
@@ -1995,13 +1995,14 @@ async def on_message(message):
         # 3. Це бачиш ТІЛЬКИ ТИ (ID з ADMIN_IDS)
         if is_owner:
             desc += "**👑 Owner Commands (Super Secret):**\n"
-			desc += "**`!clearwow <ID>`** — Clear ALL reactions from a msg\n"
+            desc += "**`!clearwow <ID>`** — Clear ALL reactions from a msg\n"
             desc += "**`!banwow <ID>`** — Protect msg from new reactions\n"
             desc += "**`!unbanwow <ID>`** — Remove reaction protection\n"
             desc += "**`!enter <ID>`** — Enter voice channel\n"
             desc += "**`!leave`** — Leave voice channel\n"
             desc += "**`!mute`** — Toggle bot microphone mute\n"
             desc += "**`!files`** — List files in local storage (/app/data)\n\n"
+            
         embed.description = desc
         await message.channel.send(embed=embed)
         return
