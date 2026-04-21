@@ -1943,7 +1943,7 @@ async def on_message(message):
         return
     # -------------------------------------------------------------
 
-    # --- 📚 КОМАНДА: !help (ДИНАМІЧНА ДЛЯ КОРИСТУВАЧІВ, АДМІНІВ ТА ВЛАСНИКА) ---
+     # --- 📚 КОМАНДА: !help (ДИНАМІЧНА ДЛЯ КОРИСТУВАЧІВ, АДМІНІВ ТА ВЛАСНИКА) ---
     if message.content == "!help":
         is_owner = message.author.id in ADMIN_IDS
         
@@ -1964,11 +1964,11 @@ async def on_message(message):
             desc += "**`!delflight <ID>`** — Remove specific flight from stats\n"
             desc += "**`!ban <ID> [reason]`** — Ban user on server\n"
             desc += "**`!unban <ID>`** — Unban user on server\n"
-			desc += "**`!audit [all/num]`** — Download server audit log\n"
-			desc += "**`!cache`** — Download bot memory (sent.json)\n"
-			desc += "**`!spy <ID>`** — Dump raw flight JSON data\n"
-			desc += "**`!stats`** — Download weekly_stats.json\n"
-			desc += "**`!disk`** — Show server disk/memory usage\n"
+            desc += "**`!audit [all/num]`** — Download server audit log\n"
+	    desc += "**`!cache`** — Download bot memory (sent.json)\n"
+	    desc += "**`!spy <ID>`** — Dump raw flight JSON data\n"
+	    desc += "**`!stats`** — Download weekly_stats.json\n"
+	    desc += "**`!disk`** — Show server disk/memory usage\n"
             desc += "**`!banlist`** — Download banned users list\n\n"
             
             desc += "**💬 Message & UI Management:**\n"
@@ -1980,11 +1980,11 @@ async def on_message(message):
             desc += "**`!unpin <ID>`** — Unpin a message\n"
             desc += "**`!wow <ID> <emoji>`** — Add reaction to a message\n"
             desc += "**`!unwow <ID> <emoji>`** — Remove reaction\n"
-			desc += "**`!teststatspin`** — Generate weekly report (PINS message)\n"
-			desc += "**`!teststats`** — Generate weekly report (NO pin)\n"
-			desc += "**`!teststatstest`** — Generate presentation report (Fake Data)\n"
-			desc += "**`!addflight <ID>`** — Force add missed flight to stats\n"
-			desc += "**`!clearstats`** — Wipe all weekly stats data\n"
+	    desc += "**`!teststatspin`** — Generate weekly report (PINS message)\n"
+	    desc += "**`!teststats`** — Generate weekly report (NO pin)\n"
+            desc += "**`!teststatstest`** — Generate presentation report (Fake Data)\n"
+	    desc += "**`!addflight <ID>`** — Force add missed flight to stats\n"
+	    desc += "**`!clearstats`** — Wipe all weekly stats data\n"
             desc += "**`!idemoji <name>`** — Get code for a custom server emoji\n\n"
             
             desc += "**🎭 Status Management:**\n"
