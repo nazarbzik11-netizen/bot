@@ -933,19 +933,19 @@ async def on_message(message):
         if not is_admin: 
             return await message.channel.send("🚫 **Access Denied**")
 
-        status_msg = await message.channel.send("⏳ **Запускаю примусове оновлення `newsky-airports.txt` на GitHub...**")
+        status_msg = await message.channel.send("⏳ **Launching a forced update of `newsky-airports.txt` on GitHub...**")
 
         try:
             # Викликаємо базову асинхронну функцію таски напряму
             await update_github_demand_task.coro()
-            await status_msg.edit(content="✅ **Примусове оновлення виконано!** Дані щойно були відправлені на GitHub. Зачекай хвилинку, поки оновиться сам сайт.")
+            await status_msg.edit(content="✅ **Forced update completed!**")
         except Exception as e:
-            await status_msg.edit(content=f"❌ **Сталася помилка під час примусового оновлення:** {e}")
+            await status_msg.edit(content=f"❌ **An error occurred during the forced update:** {e}")
         return
     # -------------------------------------------------------------
 
-# --- 🧪 КОМАНДА 1: !teststats (ЗІ ЗАКРІПЛЕННЯМ ТА ВІДКРІПЛЕННЯМ) ---
-    if message.content == "!teststats":
+# --- 🧪 КОМАНДА 1: !teststatspin (ЗІ ЗАКРІПЛЕННЯМ ТА ВІДКРІПЛЕННЯМ) ---
+    if message.content == "!teststatspin":
         if not is_admin: return await message.channel.send("🚫 **Access Denied**")
         stats = load_weekly_stats()
         if not stats: return await message.channel.send("⚠️ **Stats file is empty.**")
@@ -966,8 +966,8 @@ async def on_message(message):
                 except Exception as e: print(f"Error pinning: {e}")
         return
 
-    # --- 📌 КОМАНДА 2: !teststatsnopin (БЕЗ ЗАКРІПЛЕННЯ) ---
-    if message.content == "!teststatsnopin":
+    # --- 📌 КОМАНДА 2: !teststats (БЕЗ ЗАКРІПЛЕННЯ) ---
+    if message.content == "!teststats":
         if not is_admin: return await message.channel.send("🚫 **Access Denied**")
         stats = load_weekly_stats()
         if not stats: return await message.channel.send("⚠️ **Stats file is empty.**")
@@ -1027,18 +1027,41 @@ async def on_message(message):
         await publish_weekly_embed(message.channel, current_week, dummy_s)
         return
 
-    # --- 🧹 КОМАНДА: !clearstats (ОЧИСТИТИ ВСЮ СТАТИСТИКУ) ---
+    # --- 🧹 КОМАНДА: !clearstats (ОЧИСТИТИ ВСЮ СТАТИСТИКУ З ПЕРЕВІРКОЮ) ---
     if message.content == "!clearstats":
         if not is_admin: return await message.channel.send("🚫 **Access Denied**")
         
-        save_weekly_stats({})
+        # Генеруємо два числа від 3 до 9
+        num1 = random.randint(3, 9)
+        num2 = random.randint(3, 9)
+        correct_answer = num1 * num2
         
-        await message.channel.send("🗑️ **Stats file (`weekly_stats.json`) completely wiped!**")
+        await message.channel.send(f"⚠️ **WARNING!** You are about to completely wipe all weekly statistics.\nTo confirm this action, please solve this math problem:\n**What is {num1} x {num2}?**\n*(Just type the number in the chat, you have 20 seconds)*")
+        
+        # Фільтр: бот прийме відповідь тільки від того, хто запустив команду, і тільки в цьому ж каналі
+        def check(m):
+            return m.author == message.author and m.channel == message.channel
+            
+        try:
+            # Бот чекає на повідомлення 10 секунд
+            reply = await client.wait_for('message', check=check, timeout=10.0)
+            
+            # Перевіряємо, чи зійшлася математика
+            if reply.content.strip() == str(correct_answer):
+                save_weekly_stats({})
+                await message.channel.send("🗑️ **Stats file (`weekly_stats.json`) completely wiped!**")
+            else:
+                await message.channel.send(f"❌ **Wrong answer (it should be {correct_answer}).** Protection triggered, deletion cancelled! 😅")
+                
+        except asyncio.TimeoutError:
+            # Якщо за 20 секунд ніхто нічого не написав
+            await message.channel.send("⏳ **Time's up.** Deletion operation cancelled.")
+            
         return
     # -------------------------------------------------------------
 
     # --- ➕ КОМАНДА: !addflight <ID> (ДОДАТИ ПРОПУЩЕНИЙ РЕЙС) ---
-    if message.content.startswith("!addflight"):
+    "!addflight"):
         if not is_admin: return await message.channel.send("🚫 **Access Denied**")
         
         parts = message.content.split()
@@ -1071,7 +1094,7 @@ async def on_message(message):
     # -------------------------------------------------------------
 
 	# --- ➖ КОМАНДА: !delflight <ID> (ВІДНЯТИ РЕЙС ЗІ СТАТИСТИКИ) ---
-    if message.content.startswith("!delflight"):
+    "!delflight"):
         if not is_admin: return await message.channel.send("🚫 **Access Denied**")
         
         parts = message.content.split()
@@ -1166,7 +1189,7 @@ async def on_message(message):
     # --------------------------------------------------------
 
     # --- 📜 КОМАНДА: !audit [all/кількість] (СКАЧАТИ ЖУРНАЛ АУДИТУ) ---
-    if message.content.startswith("!audit"):
+    "!audit"):
         if not is_admin: return await message.channel.send("🚫 **Access Denied**")
         
         parts = message.content.split()
@@ -1227,7 +1250,7 @@ async def on_message(message):
     # -------------------------------------------------------------
 
     # --- 🗑️ КОМАНДА: !del (РОЗУМНЕ ВИДАЛЕННЯ ТІЛЬКИ ЗА ID) ---
-    if message.content.startswith("!del"):
+    if message.content.startswith("!del "):
         if not is_admin: return await message.channel.send("🚫 **Access Denied**")
         
         parts = message.content.split()
@@ -1616,26 +1639,6 @@ async def on_message(message):
         return
     # -------------------------------------------------------------
 
-    # --- 🔄 КОМАНДА: !undo (ВИДАЛИТИ ОСТАННЄ) ---
-    if message.content == "!undo":
-        if not is_admin: 
-            return await message.channel.send("🚫 **Access Denied**")
-        
-        if last_sent_message:
-            try:
-                await last_sent_message.delete()
-                await message.channel.send("🗑️ **Last !msg or !reply deleted.**")
-                last_sent_message = None
-            except discord.NotFound:
-                await message.channel.send("⚠️ **Message already deleted or not found.**")
-                last_sent_message = None
-            except discord.Forbidden:
-                await message.channel.send("❌ **Error:** I don't have permission to delete it.")
-        else:
-            await message.channel.send("⚠️ **Nothing to undo.** (I only remember the last `!msg` or `!reply`)")
-        return
-    # ------------------------------------------------
-
    # --- ✉️ КОМАНДА: !msg <ID_каналу> <текст> (+ МОЖНА ПРИКРІПЛЯТИ КАРТИНКИ) ---
     if message.content.startswith("!msg"):
         if not is_admin: return await message.channel.send("🚫 **Access Denied**")
@@ -1930,7 +1933,7 @@ async def on_message(message):
         
         embed = discord.Embed(title="📚 Bot Commands", color=0x3498db)
         
-       # 1. Це бачать УСІ користувачі
+        # 1. Це бачать УСІ користувачі
         desc = "**🔹 User Commands:**\n"
         desc += "**`!help`** — Show command list\n"
         desc += "**`!traffic`** — Show active flights\n\n"
@@ -1940,39 +1943,49 @@ async def on_message(message):
             desc += "**🔒 Admin Commands:**\n"
             desc += "**`!status`** — System status\n"
             desc += "**`!test [min]`** — Run test scenarios\n"
+            desc += "**`!syncweek`** — Sync flights for current week\n"
+            desc += "**`!updatedemand`** — Force GitHub demand update\n"
+            desc += "**`!delflight <ID>`** — Remove specific flight from stats\n"
+            desc += "**`!ban <ID> [reason]`** — Ban user on server\n"
+            desc += "**`!unban <ID>`** — Unban user on server\n"
+			desc += "**`!audit [all/num]`** — Download server audit log\n"
+			desc += "**`!cache`** — Download bot memory (sent.json)\n"
+			desc += "**`!spy <ID>`** — Dump raw flight JSON data\n"
+			desc += "**`!stats`** — Download weekly_stats.json\n"
+            desc += "**`!banlist`** — Download banned users list\n\n"
+            
+            desc += "**💬 Message & UI Management:**\n"
             desc += "**`!msg [ID] <text/pic>`** — Send text or image message\n"
-            desc += "**`!del <msg_ID>`** — Delete any message globally\n"
             desc += "**`!reply <ID> <text>`** — Reply to a message\n"
-            desc += "**`!undo`** — Delete last !msg or !reply\n"
-            desc += "**`!wow <ID> <emoji>`** — React to message\n"
+            desc += "**`!rename <ID> <text>`** — Append text to an existing embed\n"
+            desc += "**`!del <msg_ID>`** — Delete any message globally\n"
+            desc += "**`!pin <ID>`** — Pin a message\n"
+            desc += "**`!unpin <ID>`** — Unpin a message\n"
+            desc += "**`!wow <ID> <emoji>`** — Add reaction to a message\n"
             desc += "**`!unwow <ID> <emoji>`** — Remove reaction\n"
-            desc += "**`!ban <ID>`** — Ban user\n"
-            desc += "**`!unban <ID>`** — unban user\n"
-            desc += "**`!banlist`** — Show banned users\n\n"
+			desc += "**`!teststatspin`** — Generate weekly report (PINS message)\n"
+			desc += "**`!teststats`** — Generate weekly report (NO pin)\n"
+			desc += "**`!teststatstest`** — Generate presentation report (Fake Data)\n"
+			desc += "**`!addflight <ID>`** — Force add missed flight to stats\n"
+			desc += "**`!clearstats`** — Wipe all weekly stats data\n"
+            desc += "**`!idemoji <name>`** — Get code for a custom server emoji\n\n"
+            
             desc += "**🎭 Status Management:**\n"
-            desc += "**`!next`** — Force next status\n"
+            desc += "**`!next`** — Force next bot status\n"
             desc += "**`!addstatus <type> <text>`** — Save & Add status\n"
             desc += "**`!delstatus [num]`** — Delete status\n\n"
             
         # 3. Це бачиш ТІЛЬКИ ТИ (ID з ADMIN_IDS)
         if is_owner:
             desc += "**👑 Owner Commands (Super Secret):**\n"
-            desc += "**`!audit [all/num]`** — Download audit log\n"
-            desc += "**`!cache`** — Download sent.json memory\n"
-            desc += "**`!spy <ID>`** — Dump flight JSON\n"
-            desc += "**`!clearwow <ID>`** — Clear all reactions\n"
-            desc += "**`!banwow <ID>`** — Protect msg from reactions\n"
-            desc += "**`!unbanwow <ID>`** — Remove protection\n"
+			desc += "**`!clearwow <ID>`** — Clear ALL reactions from a msg\n"
+            desc += "**`!banwow <ID>`** — Protect msg from new reactions\n"
+            desc += "**`!unbanwow <ID>`** — Remove reaction protection\n"
             desc += "**`!enter <ID>`** — Enter voice channel\n"
             desc += "**`!leave`** — Leave voice channel\n"
-            desc += "**`!mute`** — Mute/unmute microphone\n"
-            desc += "**`!files`** — Show local directory files\n"
-            desc += "**`!disk`** — Show server disk usage\n"
-            desc += "**`!stats`** — Download weekly_stats.json\n"
-            desc += "**`!teststats`** — Preview weekly report embed\n"
-            desc += "**`!addflight <ID>`** — Add missed flight to stats\n"
-            desc += "**`!clearstats`** — Wipe all weekly stats data\n"
-            
+            desc += "**`!mute`** — Toggle bot microphone mute\n"
+            desc += "**`!files`** — List files in local storage (/app/data)\n"
+            desc += "**`!disk`** — Show server disk/memory usage\n\n"
         embed.description = desc
         await message.channel.send(embed=embed)
         return
