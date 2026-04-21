@@ -840,8 +840,24 @@ async def on_message(message):
     is_admin = False
     if message.author.id in ADMIN_IDS:
         is_admin = True
-    elif message.guild and message.author.guild_permissions.administrator:
-        is_admin = True
+    else:
+        # 1. Якщо пишуть прямо на сервері
+        if message.guild and message.author.guild_permissions.administrator:
+            is_admin = True
+        # 2. Якщо пишуть у ПП, перевіряємо їхні права на головному сервері
+        elif not message.guild:
+            main_channel = client.get_channel(CHANNEL_ID)
+            if main_channel and main_channel.guild:
+                try:
+                    # Шукаємо цього користувача на сервері
+                    member = main_channel.guild.get_member(message.author.id)
+                    if not member: # Якщо його немає в кеші, робимо запит
+                        member = await main_channel.guild.fetch_member(message.author.id)
+                        
+                    if member and member.guild_permissions.administrator:
+                        is_admin = True
+                except:
+                    pass
     
     # --- 📥 КОМАНДА: !cache (СКАЧАТИ ФАЙЛ ПАМ'ЯТІ) ---
     if message.content == "!cache":
@@ -1189,7 +1205,7 @@ async def on_message(message):
     # --------------------------------------------------------
 
     # --- 📜 КОМАНДА: !audit [all/кількість] (СКАЧАТИ ЖУРНАЛ АУДИТУ) ---
-    "!audit"):
+    if message.content.startswith("!audit"):
         if not is_admin: return await message.channel.send("🚫 **Access Denied**")
         
         parts = message.content.split()
@@ -1952,6 +1968,7 @@ async def on_message(message):
 			desc += "**`!cache`** — Download bot memory (sent.json)\n"
 			desc += "**`!spy <ID>`** — Dump raw flight JSON data\n"
 			desc += "**`!stats`** — Download weekly_stats.json\n"
+			desc += "**`!disk`** — Show server disk/memory usage\n"
             desc += "**`!banlist`** — Download banned users list\n\n"
             
             desc += "**💬 Message & UI Management:**\n"
@@ -1984,8 +2001,7 @@ async def on_message(message):
             desc += "**`!enter <ID>`** — Enter voice channel\n"
             desc += "**`!leave`** — Leave voice channel\n"
             desc += "**`!mute`** — Toggle bot microphone mute\n"
-            desc += "**`!files`** — List files in local storage (/app/data)\n"
-            desc += "**`!disk`** — Show server disk/memory usage\n\n"
+            desc += "**`!files`** — List files in local storage (/app/data)\n\n"
         embed.description = desc
         await message.channel.send(embed=embed)
         return
