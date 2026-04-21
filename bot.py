@@ -1061,7 +1061,7 @@ async def on_message(message):
     # -------------------------------------------------------------
 
     # --- ➕ КОМАНДА: !addflight <ID> (ДОДАТИ ПРОПУЩЕНИЙ РЕЙС) ---
-    "!addflight"):
+    if message.content.startswith("!addflight"):
         if not is_admin: return await message.channel.send("🚫 **Access Denied**")
         
         parts = message.content.split()
@@ -1094,7 +1094,7 @@ async def on_message(message):
     # -------------------------------------------------------------
 
 	# --- ➖ КОМАНДА: !delflight <ID> (ВІДНЯТИ РЕЙС ЗІ СТАТИСТИКИ) ---
-    "!delflight"):
+    if message.content.startswith("!delflight"):
         if not is_admin: return await message.channel.send("🚫 **Access Denied**")
         
         parts = message.content.split()
