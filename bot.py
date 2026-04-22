@@ -873,9 +873,10 @@ async def on_message(message):
         return
     # --------------------------------------------------------
 
-	# --- 📥 КОМАНДА: !syncweek (СИНХРОНІЗАЦІЯ СУТО ЗА ПОТОЧНИЙ ТИЖДЕНЬ) ---
+	# --- 📥 КОМАНДА: !syncweek (СИНХРОНІЗАЦІЯ ЗА ЧАСОМ ЗАКРИТТЯ РЕЙСІВ) ---
     if message.content == "!syncweek":
-        if not is_admin: return await message.channel.send("🚫 **Access Denied**")
+        if not is_admin: 
+            return await message.channel.send("🚫 **Access Denied**")
         
         # 1. Визначаємо початок поточного тижня (Понеділок, 00:00:00 UTC)
         now = datetime.now(timezone.utc)
@@ -884,11 +885,10 @@ async def on_message(message):
         start_iso = monday_start.strftime("%Y-%m-%dT%H:%M:%S.000Z")
         current_week_tag = get_iso_week()
         
-        status_msg = await message.channel.send(f"⏳ **Рахую рейси з початку тижня ({monday_start.strftime('%d.%m.%Y')})...**\n*Очікуй, не перебивай бота.*")
+        status_msg = await message.channel.send(f"⏳ **Рахую рейси з початку тижня ({monday_start.strftime('%d.%m.%Y')})...**")
         
         try:
             async with aiohttp.ClientSession() as session:
-                # 2. Просимо в Newsky рейси тільки починаючи з цього понеділка
                 body = {
                     "count": 100, 
                     "start": start_iso
@@ -905,7 +905,12 @@ async def on_message(message):
                 if total_found == 0:
                     return await status_msg.edit(content="✅ **За цей тиждень ще немає завершених рейсів.**")
                 
-                await status_msg.edit(content=f"⏳ **Знайдено {total_found} рейсів за цей тиждень. Починаю завантажувати деталі...**")
+                # 🔥 МАГІЯ ТУТ: Сортуємо строго за часом ЗАКРИТТЯ рейсу (updatedAt)
+                # Від тих, що закрилися першими, до тих, що закрилися щойно.
+                # Це повністю імітує роботу живого бота!
+                flights_list.sort(key=lambda x: x.get("updatedAt", ""))
+                
+                await status_msg.edit(content=f"⏳ **Знайдено {total_found} рейсів. Додаю в порядку їх закриття...**")
                 
                 for raw_f in flights_list:
                     # Ігноруємо видалені та незакриті
@@ -913,6 +918,7 @@ async def on_message(message):
                         continue
                         
                     fid = str(raw_f.get("_id") or raw_f.get("id"))
+                    
                     det = await fetch_api(session, f"/flight/{fid}")
                     if not det or "flight" not in det: 
                         continue
@@ -920,11 +926,9 @@ async def on_message(message):
                     f = det["flight"]
                     t = f.get("result", {}).get("totals", {})
                     
-                    # Відсіюємо "кинуті" рейси (де 0 миль)
                     if t.get("distance", 0) == 0 and t.get("time", 0) == 0:
                         continue
                         
-                    # 3. Перевірочний постріл: чи точно рейс з цього тижня?
                     sched_time = f.get("depTimeSched") or f.get("creationDate")
                     week_tag = get_iso_week(sched_time)
                     
@@ -937,7 +941,7 @@ async def on_message(message):
                     if added_count % 5 == 0:
                         await status_msg.edit(content=f"⏳ **Синхронізація: додано {added_count} / {total_found} рейсів...**")
                         
-                await status_msg.edit(content=f"✅ **Масове завантаження завершено!** Успішно додано **{added_count}** валідних рейсів за поточний тиждень (`{current_week_tag}`).")
+                await status_msg.edit(content=f"✅ **Синхронізація завершена!**\nДодано **{added_count}** рейсів у статистику так, якби бот був онлайн весь тиждень.")
                 
         except Exception as e:
             await status_msg.edit(content=f"❌ **Сталася помилка:** {e}")
