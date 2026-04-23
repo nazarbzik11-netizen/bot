@@ -623,9 +623,9 @@ async def send_flight_message(channel, status, f, details_type="ongoing", reply_
 
     # ---  ВИЗНАЧЕННЯ ТИПУ РЕЙСУ (СМАЙЛИК) ---
     if f.get("schedule"):
-        type_emoji = "<:sch:1496921668428369980>"
+        type_emoji = "<:sch:1496947924154847242>"
     else:
-        type_emoji = "🆓"
+        type_emoji = "<:free:1496947871604539392>"
 
     # --- 🌐 ВИЗНАЧЕННЯ МЕРЕЖІ (VATSIM/IVAO/OFFLINE) ---
     net_data = f.get("network")
