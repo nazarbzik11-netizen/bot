@@ -168,13 +168,23 @@ def update_weekly_stats(f, week_tag):
     if ac_icao != "Unknown":
         s["aircrafts"][ac_icao] = s["aircrafts"].get(ac_icao, 0) + 1
     
+    is_accelerated = False
+    accel_scalar = t.get("prices", {}).get("costScalars", {}).get("timeAcceleration", 1.0)
+    if accel_scalar < 1.0:
+        is_accelerated = True
+    elif "result" in f and "violations" in f["result"]:
+        for v in f["result"]["violations"]:
+            if "Time acceleration" in v.get("title", ""):
+                is_accelerated = True
+                break
+
     if not is_hard_crash:
         if fpm_val < s["records"]["hardest"]["fpm"]:
             s["records"]["hardest"] = {"fpm": fpm_val, "g": check_g, "pilot": pilot}
         if fpm_val < 0 and fpm_val > s["records"]["butter"]["fpm"]:
             s["records"]["butter"] = {"fpm": fpm_val, "g": check_g, "pilot": pilot}
             
-        if ftime > 0:
+        if ftime > 0 and not is_accelerated:
             flight_rec = {"time": ftime, "pilot": pilot, "dep": dep, "arr": arr}
             
             s["records"]["longest"].append(flight_rec)
