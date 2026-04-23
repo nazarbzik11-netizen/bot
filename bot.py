@@ -1066,7 +1066,7 @@ async def on_message(message):
         num2 = random.randint(3, 9)
         correct_answer = num1 * num2
         
-        await message.channel.send(f"⚠️ **WARNING!** You are about to completely wipe all weekly statistics.\nTo confirm this action, please solve this math problem:\n**What is {num1} x {num2}?**\n*(Just type the number in the chat, you have 20 seconds)*")
+        await message.channel.send(f"⚠️ **WARNING!** You are about to completely wipe all weekly statistics.\nTo confirm this action, please solve this math problem:\n**What is {num1} x {num2}?**\n*(Just type the number in the chat, you have 10 seconds)*")
         
         # Фільтр: бот прийме відповідь тільки від того, хто запустив команду, і тільки в цьому ж каналі
         def check(m):
