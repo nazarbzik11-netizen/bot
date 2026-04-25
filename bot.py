@@ -959,6 +959,40 @@ async def on_message(message):
         return
     # -------------------------------------------------------------
 
+	# --- 🕵️‍♂️ КОМАНДА: !check (ПЕРЕВІРКА ФАЙЛУ З GITHUB) ---
+    if message.content == "!check":
+        if not is_admin: return await message.channel.send("🚫 **Access Denied**")
+        
+        msg = await message.channel.send("⏳ **Стягую файл прямо з GitHub API...**")
+        
+        github_api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE_PATH}"
+        gh_headers = {
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(github_api_url, headers=gh_headers) as resp:
+                    if resp.status != 200:
+                        return await msg.edit(content=f"❌ **Помилка GitHub API:** HTTP {resp.status}")
+                        
+                    gh_data = await resp.json()
+                    file_content_b64 = gh_data['content']
+                    text = base64.b64decode(file_content_b64).decode('utf-8')
+                    
+                    # Показуємо перші 1500 символів, щоб Discord не сварився на ліміт
+                    preview = text[:1500]
+                    if len(text) > 1500:
+                        preview += "\n\n... [ТЕКСТ ОБРІЗАНО, БО ВІН ДУЖЕ ДОВГИЙ] ..."
+                        
+                    await msg.edit(content=f"✅ **Ось що бот РЕАЛЬНО бачить на GitHub зараз:**\n```text\n{preview}\n```")
+                    
+        except Exception as e:
+            await msg.edit(content=f"❌ **Помилка виконання:** {e}")
+        return
+    # -------------------------------------------------------------
+
 	# --- 🔄 КОМАНДА: !updatedemand (ПРИМУСОВЕ ОНОВЛЕННЯ GITHUB) ---
     if message.content == "!updatedemand":
         if not is_admin: 
