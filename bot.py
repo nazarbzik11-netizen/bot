@@ -959,39 +959,36 @@ async def on_message(message):
         return
     # -------------------------------------------------------------
 
-	# --- 🕵️‍♂️ КОМАНДА: !check (ПЕРЕВІРКА ФАЙЛУ З GITHUB) ---
+	# --- 🕵️‍♂️ КОМАНДА: !check (ПЕРЕВІРКА ФАЙЛУ З ОБХОДОМ 1МБ) ---
     if message.content == "!check":
         if not is_admin: return await message.channel.send("🚫 **Access Denied**")
         
-        msg = await message.channel.send("⏳ **Стягую файл прямо з GitHub API...**")
+        msg = await message.channel.send("⏳ **Стягую файл прямо з GitHub (Blob API)...**")
         
         github_api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE_PATH}"
-        gh_headers = {
-            "Authorization": f"token {GITHUB_TOKEN}",
-            "Accept": "application/vnd.github.v3+json"
-        }
+        gh_headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
         
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(github_api_url, headers=gh_headers) as resp:
                     if resp.status != 200:
-                        return await msg.edit(content=f"❌ **Помилка GitHub API:** HTTP {resp.status}")
-                        
+                        return await msg.edit(content=f"❌ **Помилка API:** HTTP {resp.status}")
+                    
                     gh_data = await resp.json()
-                    file_content_b64 = gh_data['content']
-                    text = base64.b64decode(file_content_b64).decode('utf-8')
+                    if gh_data.get('content'):
+                        text = base64.b64decode(gh_data['content']).decode('utf-8')
+                    else:
+                        # Якщо контент пустий, робимо другий запит до Blob
+                        async with session.get(gh_data['git_url'], headers=gh_headers) as b_resp:
+                            b_data = await b_resp.json()
+                            text = base64.b64decode(b_data['content']).decode('utf-8')
                     
-                    # Показуємо перші 1500 символів, щоб Discord не сварився на ліміт
-                    preview = text[:1500]
-                    if len(text) > 1500:
-                        preview += "\n\n... [ТЕКСТ ОБРІЗАНО, БО ВІН ДУЖЕ ДОВГИЙ] ..."
-                        
-                    await msg.edit(content=f"✅ **Ось що бот РЕАЛЬНО бачить на GitHub зараз:**\n```text\n{preview}\n```")
-                    
+                    preview = text[:1000] # Перші 1000 символів
+                    await msg.edit(content=f"✅ **Розмір файлу: {gh_data.get('size')} байт**\n**Бот бачить текст:**\n```json\n{preview}...\n```")
         except Exception as e:
-            await msg.edit(content=f"❌ **Помилка виконання:** {e}")
+            await msg.edit(content=f"❌ **Помилка:** {e}")
         return
-    # -------------------------------------------------------------
+#---------------------#
 
 	# --- 🔄 КОМАНДА: !updatedemand (ПРИМУСОВЕ ОНОВЛЕННЯ GITHUB) ---
     if message.content == "!updatedemand":
@@ -2379,31 +2376,47 @@ async def update_github_demand_task():
     }
 
     async with aiohttp.ClientSession() as session:
-        # 1. Завантажуємо поточний файл з GitHub (щоб дістати ICAO і ключ SHA)
+        # 1. Завантажуємо метадані файлу з GitHub (SHA та перевірка розміру)
         async with session.get(github_api_url, headers=gh_headers) as resp:
             if resp.status != 200:
                 print(f"❌ Помилка завантаження файлу з GitHub: {resp.status}")
                 return
             gh_data = await resp.json()
-            file_sha = gh_data['sha'] # Ключ, який дозволяє перезаписати файл
-            file_content_b64 = gh_data['content']
-            old_text = base64.b64decode(file_content_b64).decode('utf-8')
+            file_sha = gh_data['sha'] 
+            
+            # 🔥 ОБХІД ЛІМІТУ GITHUB 1 МБ 🔥
+            if gh_data.get('content'):
+                # Якщо файл < 1 МБ, контент є у відповіді
+                old_text = base64.b64decode(gh_data['content']).decode('utf-8')
+            else:
+                # Якщо файл > 1 МБ, тягнемо контент через Blob API
+                print(f"📦 Файл великий ({gh_data.get('size')} байт). Використовую Blob API...")
+                blob_url = gh_data['git_url']
+                async with session.get(blob_url, headers=gh_headers) as b_resp:
+                    b_data = await b_resp.json()
+                    old_text = base64.b64decode(b_data['content']).decode('utf-8')
 
-        # 2. Парсимо ICAO зі старого тексту (як у твоєму скрипті)
+        # 2. Розумний парсинг ICAO (через розділювачі ---)
         icaos = []
-        for line in old_text.splitlines():
-            line = line.strip()
-            if line.startswith("{") and line.endswith("}"):
+        blocks = old_text.split("---")
+        for block in blocks:
+            block = block.strip()
+            # Шукаємо JSON усередині блоку (навіть якщо він розбитий на рядки)
+            start = block.find("{")
+            end = block.rfind("}")
+            if start != -1 and end != -1:
                 try:
-                    data = json.loads(line)
+                    data = json.loads(block[start:end+1])
                     if "icao" in data:
                         icaos.append(data["icao"])
                 except:
                     continue
 
         if not icaos:
-            print("❌ Не знайдено ICAO у файлі!")
+            print("❌ Не знайдено ICAO у файлі (список icaos пустий)!")
             return
+        
+        print(f"✅ Успішно знайдено {len(icaos)} ICAO для оновлення.")
 
         # 3. Збираємо свіжі дані з Newsky
         fresh_data = []
