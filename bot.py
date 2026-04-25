@@ -2355,16 +2355,28 @@ async def update_github_demand_task():
             file_content_b64 = gh_data['content']
             old_text = base64.b64decode(file_content_b64).decode('utf-8')
 
-        # 2. Парсимо ICAO зі старого тексту (як у твоєму скрипті)
+        # 2. Парсимо ICAO зі старого тексту (РОЗУМНИЙ ПАРСИНГ БЛОКІВ)
         icaos = []
-        for line in old_text.splitlines():
-            line = line.strip()
-            if line.startswith("{") and line.endswith("}"):
+        
+        # Знаходимо початок першого JSON (відкидаємо текст UPDATED)
+        start_idx = old_text.find('{')
+        if start_idx != -1:
+            json_text = old_text[start_idx:]
+            
+            # Розрізаємо весь текст на блоки по розділювачу ---
+            blocks = json_text.split('---')
+            
+            for block in blocks:
+                block = block.strip()
+                if not block:
+                    continue
                 try:
-                    data = json.loads(line)
+                    # Тепер боту байдуже, JSON в один рядок чи в сто рядків
+                    data = json.loads(block)
                     if "icao" in data:
                         icaos.append(data["icao"])
-                except:
+                except Exception as e:
+                    print(f"⚠️ Пропущено битий блок: {e}")
                     continue
 
         if not icaos:
