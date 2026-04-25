@@ -559,24 +559,25 @@ def get_landing_data(f, details_type):
             if w_dir == 0 and w_spd > 0: 
                 w_dir = 360
                 
-            tw_str = ""
-            if w_z < -0.5:
-                tw_str = f" | Tailwind: {int(round(abs(w_z)))} kt"
+            comp = []
+            if w_x > 0:
+                comp.append(f"Crosswind: {w_x} kt")
+            if w_z > 0.5:
+                comp.append(f"Tailwind: {int(round(w_z))} kt")
                 
-            wind_str = f"\n<:wind:1482073151071326229> **{w_dir}° | {w_spd} kt** (Crosswind: {w_x} kt{tw_str})"
+            extra_str = f" ({' | '.join(comp)})" if comp else ""
+            wind_str = f"\n<:wind:1482073151071326229> **{w_dir}° | {w_spd} kt**{extra_str}"
             
         return f"📉 **{fpm_val} fpm**{g_str}{wind_str}"
     
     return "📉 **N/A**"
 
-# Додаємо глобальні змінні для нашої черги (Lock створимо пізніше)
 API_LOCK = None
 REQUEST_TIMES = []
 
 async def fetch_api(session, path, method="GET", body=None):
     global REQUEST_TIMES, API_LOCK
     
-    # "Лінива" ініціалізація замка (безпечно для будь-якої версії Python)
     if API_LOCK is None:
         API_LOCK = asyncio.Lock()
     
