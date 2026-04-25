@@ -2450,19 +2450,19 @@ async def update_github_demand_task():
             
             # GitHub API вимагає текст у форматі Base64
             new_content_b64 = base64.b64encode(new_content.encode('utf-8')).decode('utf-8')
-            
+
             push_payload = {
-                "message": "🤖 Auto update",
+                "message": f"🤖 Auto update demand data",
                 "content": new_content_b64,
-                "sha": file_sha # Вказуємо, яку саме версію файлу ми замінюємо
+                "sha": file_sha  # ВАЖЛИВО: Це має бути sha з ПЕРШОГО запиту (/contents/), а не з Blob!
             }
             
             async with session.put(github_api_url, headers=gh_headers, json=push_payload) as put_resp:
                 if put_resp.status in [200, 201]:
-                    print(f"🎉 Файл на GitHub успішно оновлено о {now_str}!")
+                    print(f"🎉 Файл на GitHub успішно оновлено!")
                 else:
                     err_msg = await put_resp.text()
-                    print(f"❌ Помилка запису на GitHub: {err_msg}")
+                    print(f"❌ Помилка запису на GitHub: {put_resp.status} - {err_msg}")
 
 # --- 🚀 ЗАПУСК ГОЛОВНОГО ЦИКЛУ ---
 @client.event
