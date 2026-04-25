@@ -10,308 +10,11 @@ import io
 import time
 import shutil
 import base64
-import math
 from pathlib import Path
 from itertools import cycle
 from datetime import datetime, timezone, timedelta
 from aiohttp import web
 from discord.ext import tasks
-
-# ==========================================
-# НАЛАШТУВАННЯ АНАЛІТИКИ ЧАРТЕРІВ
-# ==========================================
-MAX_DISTANCE_NM = 1500
-MIN_PAX_AMOUNT = 50
-MIN_CARGO_AMOUNT = 10
-MAX_DISPLAY_PAX = 450
-MAX_DISPLAY_CARGO = 99
-AMOUNT_DIVISOR = 3.7
-INBOUND_AMOUNT_DIVISOR = 3.5
-INBOUND_DESTINATION_CAP_DIVISOR = 2
-
-DIR_BEARINGS = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]
-
-REVERSE_DIRECTION = {
-    0: 150,
-    30: 180,
-    60: 210,
-    90: 240,
-    120: 270,
-    150: 300,
-    180: 330,
-    210: 0,
-    240: 30,
-    270: 60,
-    300: 90,
-    330: 120,
-}
-
-# --- Математичні функції зі скриптів ---
-def calculate_distance_nm(lat1, lon1, lat2, lon2):
-    """Рахує відстань між двома координатами у морських милях (Haversine)"""
-    R = 3440.065 # Радіус Землі в морських милях
-    lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
-    a = math.sin(dlat / 2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2)**2
-    c = 2 * math.asin(math.sqrt(a))
-    return round(R * c)
-
-def pct_diff(current, normal):
-    """Рахує різницю у відсотках (як у newsky_report.py)"""
-    if normal == 0: return 0.0
-    return ((current - normal) / normal) * 100
-
-def cargo_units_to_tons(units):
-    """Переводить одиниці вантажу в тонни (як у newsky_report.py)"""
-    return round(units / 3333)
-
-# ==========================================
-# ЕТАП 2: ЗАВАНТАЖЕННЯ І ПАРСИНГ ДАНИХ
-# ==========================================
-async def fetch_and_parse_airports(ctx=None):
-    """Стягує файл з GitHub і формує словник з відсотками та тоннами"""
-    github_api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE_PATH}"
-    gh_headers = {
-        "Authorization": f"token {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github.v3+json"
-    }
-
-    if ctx: await ctx.send("📊 **Етап 1/3 (Аналітика):** Читаю сиру базу аеропортів з GitHub...")
-
-    async with aiohttp.ClientSession() as session:
-        # 1. Читаємо файл через Blob API
-        async with session.get(github_api_url, headers=gh_headers) as resp:
-            if resp.status != 200:
-                if ctx: await ctx.send(f"❌ Помилка доступу до бази на GitHub: {resp.status}")
-                return None
-            
-            gh_data = await resp.json()
-            if gh_data.get('content'):
-                text = base64.b64decode(gh_data['content']).decode('utf-8')
-            else:
-                async with session.get(gh_data['git_url'], headers=gh_headers) as b_resp:
-                    b_data = await b_resp.json()
-                    text = base64.b64decode(b_data['content']).decode('utf-8')
-
-    # 2. Формуємо математичну модель у пам'яті
-    airports_db = {}
-    blocks = text.split("---")
-    
-    for block in blocks:
-        block = block.strip()
-        start = block.find("{")
-        end = block.rfind("}")
-        if start != -1 and end != -1:
-            try:
-                data = json.loads(block[start:end+1])
-                icao = data.get("icao")
-                if not icao: continue
-                
-                # Беремо статистику категорії "A" (як у твоєму скрипті)
-                traffic_a = data.get("traffic", {}).get("A", {})
-                if not traffic_a: continue
-                
-                pax_data = traffic_a.get("pax", {})
-                cargo_data = traffic_a.get("cargo", {})
-                
-                # Створюємо профіль аеропорту
-                airports_db[icao] = {
-                    "name": data.get("name", ""),
-                    "lat": data["location"]["lat"],
-                    "lon": data["location"]["lon"],
-                    "pax": {},
-                    "cargo": {}
-                }
-                
-                # Прораховуємо пасажирів (відсотки)
-                if "directions" in pax_data:
-                    for idx, bearing in enumerate(DIR_BEARINGS):
-                        d = pax_data["directions"][idx]
-                        current = d.get("current", 0)
-                        normal = d.get("normal", 0)
-                        airports_db[icao]["pax"][bearing] = {
-                            "current": current,
-                            "diff_pct": pct_diff(current, normal)
-                        }
-                        
-                # Прораховуємо вантаж (переводимо в тонни + відсотки)
-                if "directions" in cargo_data:
-                    for idx, bearing in enumerate(DIR_BEARINGS):
-                        d = cargo_data["directions"][idx]
-                        current_units = d.get("current", 0)
-                        normal_units = d.get("normal", 0)
-                        airports_db[icao]["cargo"][bearing] = {
-                            "current": cargo_units_to_tons(current_units),
-                            "diff_pct": pct_diff(current_units, normal_units)
-                        }
-            except Exception as e:
-                continue
-
-    if ctx: await ctx.send(f"✅ **Базу прораховано!** Аеропортів у пам'яті: **{len(airports_db)}**")
-    return airports_db
-
-# ==========================================
-# ЕТАП 3: ОРИГІНАЛЬНА ЛОГІКА ТВОЇХ СКРИПТІВ
-# ==========================================
-
-def get_bearing(lat1, lon1, lat2, lon2):
-    """Визначає кут (bearing) між двома точками"""
-    d_lon = math.radians(lon2 - lon1)
-    lat1, lat2 = math.radians(lat1), math.radians(lat2)
-    y = math.sin(d_lon) * math.cos(lat2)
-    x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(d_lon)
-    brng = math.degrees(math.atan2(y, x))
-    return (brng + 360) % 360
-
-def get_sector_bearing(brng):
-    """Повертає найближчий сектор (0, 30, 60...)"""
-    return min(DIR_BEARINGS, key=lambda x: min(abs(x - brng), 360 - abs(x - brng)))
-
-def choose_outbound_destination(origin_icao, airports, type_key):
-    origin = airports[origin_icao]
-    best_dest = None
-    max_val = -1
-
-    for dest_icao, dest in airports.items():
-        if dest_icao == origin_icao: continue
-        dist = calculate_distance_nm(origin["lat"], origin["lon"], dest["lat"], dest["lon"])
-        if dist > MAX_DISTANCE_NM: continue
-
-        brng = get_bearing(origin["lat"], origin["lon"], dest["lat"], dest["lon"])
-        sector = get_sector_bearing(brng)
-
-        # Дані попиту з бази для цього сектора
-        origin_data = origin[type_key].get(sector)
-        if not origin_data or origin_data["diff_pct"] < 0: continue
-        if type_key == "pax" and origin_data["current"] < MIN_PAX_AMOUNT: continue
-        if type_key == "cargo" and origin_data["current"] < MIN_CARGO_AMOUNT: continue
-
-        # Перевірка зворотного попиту (reverse)
-        rev_sector = REVERSE_DIRECTION.get(sector)
-        dest_data = dest[type_key].get(rev_sector)
-        if not dest_data or dest_data["diff_pct"] > 0: continue
-
-        if origin_data["current"] > max_val:
-            max_val = origin_data["current"]
-            best_dest = (dest_icao, sector, origin_data["current"], origin_data["diff_pct"], dist)
-    return best_dest
-
-def choose_inbound_source(dest_icao, airports, type_key):
-    dest = airports[dest_icao]
-    best_src = None
-    max_val = -1
-
-    # Шукаємо найгірший (найбільш від'ємний) сектор вильоту з нашого порту
-    worst_sector = None
-    min_pct = 0
-    for sector, data in dest[type_key].items():
-        if data["diff_pct"] < min_pct:
-            min_pct = data["diff_pct"]
-            worst_sector = sector
-    
-    if worst_sector is None: return None
-
-    # Шукаємо аеропорт у цьому секторі, який має сильний попит до нас
-    rev_sector = REVERSE_DIRECTION.get(worst_sector)
-    for src_icao, src in airports.items():
-        if src_icao == dest_icao: continue
-        dist = calculate_distance_nm(src["lat"], src["lon"], dest["lat"], dest["lon"])
-        if dist > MAX_DISTANCE_NM: continue
-
-        # Перевіряємо, чи потрапляє src аеропорт у потрібний сектор відносно нас
-        brng_from_us = get_bearing(dest["lat"], dest["lon"], src["lat"], src["lon"])
-        if get_sector_bearing(brng_from_us) != worst_sector: continue
-
-        src_data = src[type_key].get(rev_sector)
-        if not src_data or src_data["current"] < (MIN_PAX_AMOUNT if type_key == "pax" else MIN_CARGO_AMOUNT):
-            continue
-
-        if src_data["current"] > max_val:
-            max_val = src_data["current"]
-            best_src = (src_icao, rev_sector, src_data["current"], src_data["diff_pct"], dist, dest[type_key][worst_sector]["diff_pct"])
-    return best_src
-
-def format_outbound_line(icao, type_key, record):
-    if not record: return f"out {type_key} {icao}-NONE"
-    dest_icao, b, val, pct, dist = record
-    unit = "pax" if type_key == "pax" else "t"
-    calc_val = round(val / AMOUNT_DIVISOR)
-    
-    if type_key == "pax" and calc_val > MAX_DISPLAY_PAX: d_val = f">{MAX_DISPLAY_PAX}"
-    elif type_key == "cargo" and calc_val > MAX_DISPLAY_CARGO: d_val = f">{MAX_DISPLAY_CARGO}"
-    else: d_val = str(calc_val)
-    
-    return f"out {type_key} {icao}-{dest_icao} ({dist}nm) ~{d_val} {unit} | {icao}_{type_key}_{b} {val} / {pct:+.0f}%"
-
-def format_inbound_line(icao, type_key, record):
-    if not record: return f"in {type_key} {icao}-NONE"
-    src_icao, b, val, pct, dist, dest_pct = record
-    unit = "pax" if type_key == "pax" else "t"
-    
-    calc_val = min(round(val / INBOUND_AMOUNT_DIVISOR), round(val / INBOUND_DESTINATION_CAP_DIVISOR))
-    return f"in {type_key} {src_icao}-{icao} ({dist}nm) ~{calc_val} {unit} | {src_icao}_{type_key}_{b} {val} / {pct:+.0f}% | {icao}_{type_key}_{REVERSE_DIRECTION[b]} {dest_pct:+.0f}%"
-
-def build_top_sections(airports):
-    """Генерує блоки ТОП-5 (Міжнародні та Внутрішні)"""
-    outbound_list = []
-    inbound_list = []
-    uk_airports = [k for k in airports.keys() if k.startswith("UK")]
-
-    for icao in uk_airports:
-        for t in ["pax", "cargo"]:
-            out = choose_outbound_destination(icao, airports, t)
-            if out: outbound_list.append((icao, t, out))
-            
-            ib = choose_inbound_source(icao, airports, t)
-            if ib: inbound_list.append((icao, t, ib))
-
-    # Сортування ТОПів
-    outbound_list.sort(key=lambda x: x[2][2], reverse=True)
-    inbound_list.sort(key=lambda x: x[2][2], reverse=True)
-
-    lines = ["ТОП-5 міжнародних на виліт"]
-    for origin, t, rec in [x for x in outbound_list if not x[2][0].startswith("UK")][:5]:
-        emoji = "👨‍💼" if t == "pax" else "📦"
-        calc_val = round(rec[2] / AMOUNT_DIVISOR)
-        val_str = f">{MAX_DISPLAY_PAX}" if (t == "pax" and calc_val > MAX_DISPLAY_PAX) else str(calc_val)
-        lines.append(f"{emoji} з {origin} 🇺🇦 до {rec[0]} {val_str} {t} ({rec[4]}nm)")
-
-    lines.append("\nТОП-5 міжнародних на приліт")
-    for dest, t, rec in [x for x in inbound_list if not x[2][0].startswith("UK")][:5]:
-        emoji = "👨‍💼" if t == "pax" else "📦"
-        calc_val = round(rec[2] / INBOUND_AMOUNT_DIVISOR)
-        lines.append(f"{emoji} {calc_val}{'t' if t=='cargo' else ' pax'} з {rec[0]} до {dest} 🇺🇦 ({rec[4]}nm)")
-    
-    return lines
-
-def build_output(airports):
-    """Фінальна збірка всього тексту звіту"""
-    now_str = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M UTC")
-    lines = [
-        "Newsky charter recommendations",
-        f"Total UK airports: {len([k for k in airports.keys() if k.startswith('UK')])}",
-        f"Max distance: {MAX_DISTANCE_NM}nm",
-        f"Generated: {now_str}",
-        ""
-    ]
-    
-    # Додаємо ТОПи
-    lines.extend(build_top_sections(airports))
-    lines.append("\n" + "-"*60 + "\n")
-
-    # Детальний список по кожному порту
-    uk_ports = sorted([k for k in airports.keys() if k.startswith("UK")])
-    for icao in uk_ports:
-        name = airports[icao].get("name", "")
-        lines.append(f"{icao} ({name})")
-        lines.append(format_outbound_line(icao, "pax", choose_outbound_destination(icao, airports, "pax")))
-        lines.append(format_outbound_line(icao, "cargo", choose_outbound_destination(icao, airports, "cargo")))
-        lines.append(format_inbound_line(icao, "pax", choose_inbound_source(icao, airports, "pax")))
-        lines.append(format_inbound_line(icao, "cargo", choose_inbound_source(icao, airports, "cargo")))
-        lines.append("")
-
-    return "\n".join(lines)
 
 # ---------- НАЛАШТУВАННЯ ----------
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -1256,37 +959,6 @@ async def on_message(message):
         return
     # -------------------------------------------------------------
 
-	# --- 🕵️‍♂️ КОМАНДА: !check (ПЕРЕВІРКА ФАЙЛУ З ОБХОДОМ 1МБ) ---
-    if message.content == "!check":
-        if not is_admin: return await message.channel.send("🚫 **Access Denied**")
-        
-        msg = await message.channel.send("⏳ **Стягую файл прямо з GitHub (Blob API)...**")
-        
-        github_api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE_PATH}"
-        gh_headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-        
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(github_api_url, headers=gh_headers) as resp:
-                    if resp.status != 200:
-                        return await msg.edit(content=f"❌ **Помилка API:** HTTP {resp.status}")
-                    
-                    gh_data = await resp.json()
-                    if gh_data.get('content'):
-                        text = base64.b64decode(gh_data['content']).decode('utf-8')
-                    else:
-                        # Якщо контент пустий, робимо другий запит до Blob
-                        async with session.get(gh_data['git_url'], headers=gh_headers) as b_resp:
-                            b_data = await b_resp.json()
-                            text = base64.b64decode(b_data['content']).decode('utf-8')
-                    
-                    preview = text[:1000] # Перші 1000 символів
-                    await msg.edit(content=f"✅ **Розмір файлу: {gh_data.get('size')} байт**\n**Бот бачить текст:**\n```json\n{preview}...\n```")
-        except Exception as e:
-            await msg.edit(content=f"❌ **Помилка:** {e}")
-        return
-#---------------------#
-
 	# --- 🔄 КОМАНДА: !updatedemand (ПРИМУСОВЕ ОНОВЛЕННЯ GITHUB) ---
     if message.content == "!updatedemand":
         if not is_admin: 
@@ -1295,8 +967,8 @@ async def on_message(message):
         status_msg = await message.channel.send("⏳ **Launching a forced update of `newsky-airports.txt` on GitHub...**")
 
         try:
-            # Викликаємо базову асинхронну функцію таски напряму (і даємо їй чат для звітів)
-            await update_github_demand_task.coro(message.channel)
+            # Викликаємо базову асинхронну функцію таски напряму
+            await update_github_demand_task.coro()
             await status_msg.edit(content="✅ **Forced update completed!**")
         except Exception as e:
             await status_msg.edit(content=f"❌ **An error occurred during the forced update:** {e}")
@@ -2660,7 +2332,7 @@ async def start_web_server():
 # ====================================================================
 
 @tasks.loop(minutes=60)
-async def update_github_demand_task(ctx=None):
+async def update_github_demand_task():
     if not GITHUB_TOKEN or not NEWSKY_SID:
         print("⚠️ Немає токенів для GitHub або Newsky. Пропускаю оновлення файлу.")
         return
@@ -2673,47 +2345,31 @@ async def update_github_demand_task(ctx=None):
     }
 
     async with aiohttp.ClientSession() as session:
-        # 1. Завантажуємо метадані файлу з GitHub (SHA та перевірка розміру)
+        # 1. Завантажуємо поточний файл з GitHub (щоб дістати ICAO і ключ SHA)
         async with session.get(github_api_url, headers=gh_headers) as resp:
             if resp.status != 200:
                 print(f"❌ Помилка завантаження файлу з GitHub: {resp.status}")
                 return
             gh_data = await resp.json()
-            file_sha = gh_data['sha'] 
-            
-            # 🔥 ОБХІД ЛІМІТУ GITHUB 1 МБ 🔥
-            if gh_data.get('content'):
-                # Якщо файл < 1 МБ, контент є у відповіді
-                old_text = base64.b64decode(gh_data['content']).decode('utf-8')
-            else:
-                # Якщо файл > 1 МБ, тягнемо контент через Blob API
-                print(f"📦 Файл великий ({gh_data.get('size')} байт). Використовую Blob API...")
-                blob_url = gh_data['git_url']
-                async with session.get(blob_url, headers=gh_headers) as b_resp:
-                    b_data = await b_resp.json()
-                    old_text = base64.b64decode(b_data['content']).decode('utf-8')
+            file_sha = gh_data['sha'] # Ключ, який дозволяє перезаписати файл
+            file_content_b64 = gh_data['content']
+            old_text = base64.b64decode(file_content_b64).decode('utf-8')
 
-        # 2. Розумний парсинг ICAO (через розділювачі ---)
+        # 2. Парсимо ICAO зі старого тексту (як у твоєму скрипті)
         icaos = []
-        blocks = old_text.split("---")
-        for block in blocks:
-            block = block.strip()
-            # Шукаємо JSON усередині блоку (навіть якщо він розбитий на рядки)
-            start = block.find("{")
-            end = block.rfind("}")
-            if start != -1 and end != -1:
+        for line in old_text.splitlines():
+            line = line.strip()
+            if line.startswith("{") and line.endswith("}"):
                 try:
-                    data = json.loads(block[start:end+1])
+                    data = json.loads(line)
                     if "icao" in data:
                         icaos.append(data["icao"])
                 except:
                     continue
 
         if not icaos:
-            print("❌ Не знайдено ICAO у файлі (список icaos пустий)!")
+            print("❌ Не знайдено ICAO у файлі!")
             return
-        
-        print(f"✅ Успішно знайдено {len(icaos)} ICAO для оновлення.")
 
         # 3. Збираємо свіжі дані з Newsky
         fresh_data = []
@@ -2747,49 +2403,19 @@ async def update_github_demand_task(ctx=None):
             
             # GitHub API вимагає текст у форматі Base64
             new_content_b64 = base64.b64encode(new_content.encode('utf-8')).decode('utf-8')
-
+            
             push_payload = {
-                "message": f"🤖 Auto update demand data",
+                "message": "🤖 Auto update",
                 "content": new_content_b64,
-                "sha": file_sha  # ВАЖЛИВО: Це має бути sha з ПЕРШОГО запиту (/contents/), а не з Blob!
+                "sha": file_sha # Вказуємо, яку саме версію файлу ми замінюємо
             }
             
             async with session.put(github_api_url, headers=gh_headers, json=push_payload) as put_resp:
                 if put_resp.status in [200, 201]:
-                    print(f"🎉 Файл на GitHub успішно оновлено!")
-                    await process_and_upload_charters(ctx)
+                    print(f"🎉 Файл на GitHub успішно оновлено о {now_str}!")
                 else:
                     err_msg = await put_resp.text()
-                    print(f"❌ Помилка запису на GitHub: {put_resp.status} - {err_msg}")
-
-async def process_and_upload_charters(ctx=None):
-    # 1. Стягуємо дані (викликає Етап 2)
-    airports_db = await fetch_and_parse_airports(ctx)
-    if not airports_db: return
-
-    # 2. Генеруємо текст (викликає Етап 3)
-    try:
-        report_text = build_output(airports_db)
-    except Exception as e:
-        if ctx: await ctx.send(f"❌ Помилка розрахунку: {e}")
-        return
-
-    # 3. Записуємо на GitHub
-    github_api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/newsky-charter-results.txt"
-    gh_headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get(github_api_url, headers=gh_headers) as sha_resp:
-            latest_sha = (await sha_resp.json()).get('sha') if sha_resp.status == 200 else None
-
-        payload = {
-            "message": "🤖 Auto update charter results",
-            "content": base64.b64encode(report_text.encode('utf-8')).decode('utf-8'),
-            "sha": latest_sha
-        }
-        async with session.put(github_api_url, headers=gh_headers, json=payload) as put_resp:
-            if put_resp.status in [200, 201] and ctx:
-                await ctx.send("✅ **Аналітику чартерів оновлено на GitHub!**")
+                    print(f"❌ Помилка запису на GitHub: {err_msg}")
 
 # --- 🚀 ЗАПУСК ГОЛОВНОГО ЦИКЛУ ---
 @client.event
