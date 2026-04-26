@@ -964,20 +964,20 @@ async def on_message(message):
     # -------------------------------------------------------------
 
 	# --- 🔄 КОМАНДА: !updatedemand (ПРИМУСОВЕ ОНОВЛЕННЯ GITHUB) ---
-    if message.content == "!updatedemand":
-        if not is_admin: 
-            return await message.channel.send("🚫 **Access Denied**")
+	if message.content == "!updatedemand":
+    if not is_admin: 
+        return await message.channel.send("🚫 **Access Denied**")
 
-        status_msg = await message.channel.send("⏳ **Launching a forced update of `newsky-airports.txt` on GitHub...**")
+    status_msg = await message.channel.send("⏳ **Step 1: Updating raw base `newsky-airports.txt` via API...**")
 
-        try:
-            # Викликаємо базову асинхронну функцію таски напряму
-            await update_github_demand_task.coro()
-            await status_msg.edit(content="✅ **Forced update completed!**")
-        except Exception as e:
-            await status_msg.edit(content=f"❌ **An error occurred during the forced update:** {e}")
-        return
-    # -------------------------------------------------------------
+    try:
+        await update_github_demand_task.coro()
+        await status_msg.edit(content="✅ **Base updated on GitHub!**")
+        await run_analytics_pipeline(message.channel)
+    except Exception as e:
+        await status_msg.edit(content=f"❌ **Error:** {e}")
+    return
+# -------------------------------------------------------------
 
 # --- 🧪 КОМАНДА 1: !teststatspin (ЗІ ЗАКРІПЛЕННЯМ ТА ВІДКРІПЛЕННЯМ) ---
     if message.content == "!teststatspin":
@@ -2349,15 +2349,27 @@ async def update_github_demand_task():
     }
 
     async with aiohttp.ClientSession() as session:
-        # 1. Завантажуємо поточний файл з GitHub (щоб дістати ICAO і ключ SHA)
-        async with session.get(github_api_url, headers=gh_headers) as resp:
-            if resp.status != 200:
-                print(f"❌ Помилка завантаження файлу з GitHub: {resp.status}")
+        async with aiohttp.ClientSession() as session:
+        # 1. Завантажуємо поточний файл з GitHub (щоб дістати ICAO) та отримуємо SHA через Tree API
+        # --- ОБХІД ЛІМІТУ 1 МБ ЧЕРЕЗ GIT TREE API ---
+        tree_url = f"https://api.github.com/repos/{GITHUB_REPO}/git/trees/main"
+        file_sha = None
+        async with session.get(tree_url, headers=gh_headers) as tree_resp:
+            if tree_resp.status == 200:
+                tree_data = await tree_resp.json()
+                for item in tree_data.get("tree", []):
+                    if item.get("path") == GITHUB_FILE_PATH:
+                        file_sha = item.get("sha")
+                        break
+        # ---------------------------------------------
+        
+        # Завантажуємо сам текст файлу через "сирий" URL (бо Contents API не дасть скачати файл > 1MB)
+        base_raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/{GITHUB_FILE_PATH}"
+        async with session.get(base_raw_url, headers={"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3.raw"}) as raw_resp:
+            if raw_resp.status != 200:
+                print(f"❌ Помилка завантаження RAW файлу з GitHub: {raw_resp.status}")
                 return
-            gh_data = await resp.json()
-            file_sha = gh_data['sha'] # Ключ, який дозволяє перезаписати файл
-            file_content_b64 = gh_data['content']
-            old_text = base64.b64decode(file_content_b64).decode('utf-8')
+            old_text = await raw_resp.text(encoding='utf-8')
 
         # 2. Парсимо ICAO зі старого тексту (як у твоєму скрипті)
         icaos = []
@@ -2417,10 +2429,78 @@ async def update_github_demand_task():
             async with session.put(github_api_url, headers=gh_headers, json=push_payload) as put_resp:
                 if put_resp.status in [200, 201]:
                     print(f"🎉 Файл на GitHub успішно оновлено о {now_str}!")
+					await run_analytics_pipeline(ctx=None)
                 else:
                     err_msg = await put_resp.text()
                     print(f"❌ Помилка запису на GitHub: {err_msg}")
 
+# ==========================================
+# ANALYTICS PIPELINE: REPORT & CHARTERS
+# ==========================================
+
+async def run_analytics_pipeline(ctx=None):
+if ctx: await ctx.send("⏳ Step 2: Downloading base and scripts from GitHub...")
+
+gh_headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3.raw"}
+base_raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
+
+files_to_download = [
+    "newsky-airports.txt",
+    "newsky_report.py",
+    "newsky_charter_with_tops_v4.py"
+]
+
+async with aiohttp.ClientSession() as session:
+    for file_name in files_to_download:
+        async with session.get(f"{base_raw_url}/{file_name}", headers=gh_headers) as resp:
+            if resp.status == 200:
+                content = await resp.read()
+                with open(file_name, "wb") as f:
+                    f.write(content)
+            else:
+                if ctx: await ctx.send(f"❌ Error downloading {file_name}: HTTP {resp.status}")
+                return
+
+if ctx: await ctx.send("⚙️ **Step 3: Running analytics (Report ➔ Charters)...**")
+
+try:
+    subprocess.run([sys.executable, "newsky_report.py"], check=True, capture_output=True, text=True)
+    subprocess.run([sys.executable, "newsky_charter_with_tops_v4.py"], check=True, capture_output=True, text=True)
+except subprocess.CalledProcessError as e:
+    if ctx: await ctx.send(f"❌ **Script Error!**\n{e.stderr[-1000:]}")
+    return
+
+if not os.path.exists("newsky-charter-results.txt"):
+    if ctx: await ctx.send("❌ File `newsky-charter-results.txt` was not created.")
+    return
+
+with open("newsky-charter-results.txt", "r", encoding="utf-8") as f:
+    final_text = f.read()
+
+if ctx: await ctx.send("📤 **Step 4: Uploading final results to GitHub...**")
+
+github_api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/newsky-charter-results.txt"
+gh_put_headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+
+async with aiohttp.ClientSession() as session:
+    async with session.get(github_api_url, headers=gh_put_headers) as sha_resp:
+        latest_sha = (await sha_resp.json()).get('sha') if sha_resp.status == 200 else None
+
+    payload = {
+        "message": "🤖 Auto update charter tops",
+        "content": base64.b64encode(final_text.encode('utf-8')).decode('utf-8'),
+        "sha": latest_sha
+    }
+    
+    async with session.put(github_api_url, headers=gh_put_headers, json=payload) as put_resp:
+        if put_resp.status in [200, 201]:
+            if ctx: await ctx.send("✅ **SUCCESS! Analytics complete, results updated on GitHub!** 🚀")
+
+cleanup_files = files_to_download + ["newsky-airports-report.txt", "newsky-charter-results.txt"]
+for f in cleanup_files:
+    if os.path.exists(f):
+        os.remove(f)
+	
 # --- 🚀 ЗАПУСК ГОЛОВНОГО ЦИКЛУ ---
 @client.event
 async def on_ready():
