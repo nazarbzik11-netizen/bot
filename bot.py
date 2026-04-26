@@ -560,10 +560,12 @@ def get_landing_data(f, details_type):
                 w_dir = 360
                 
             comp = []
+            
             if w_x > 0:
                 comp.append(f"Crosswind: {w_x} kt")
-            if w_z > 0.5:
-                comp.append(f"Tailwind: {int(round(w_z))} kt")
+                
+            if w_z <= -0.5:
+                comp.append(f"Tailwind: {int(round(abs(w_z)))} kt")
                 
             extra_str = f" ({' | '.join(comp)})" if comp else ""
             wind_str = f"\n<:wind:1482073151071326229> **{w_dir}° | {w_spd} kt**{extra_str}"
