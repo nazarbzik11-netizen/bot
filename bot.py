@@ -10,6 +10,8 @@ import io
 import time
 import shutil
 import base64
+import subprocess
+import sys
 from pathlib import Path
 from itertools import cycle
 from datetime import datetime, timezone, timedelta
