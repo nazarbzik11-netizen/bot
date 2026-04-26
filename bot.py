@@ -566,7 +566,7 @@ def get_landing_data(f, details_type):
             if w_x > 0:
                 comp.append(f"Crosswind: {w_x} kt")
                 
-            if w_z <= -0.5:
+            if w_z <= 0.5:
                 comp.append(f"Tailwind: {int(round(abs(w_z)))} kt")
                 
             extra_str = f" ({' | '.join(comp)})" if comp else ""
