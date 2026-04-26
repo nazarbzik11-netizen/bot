@@ -964,7 +964,7 @@ async def on_message(message):
     # -------------------------------------------------------------
 
 	# --- 🔄 КОМАНДА: !updatedemand (ПРИМУСОВЕ ОНОВЛЕННЯ GITHUB) ---
-	if message.content == "!updatedemand":
+		if message.content == "!updatedemand":
 		if not is_admin: 
 			return await message.channel.send("🚫 **Access Denied**")
 
