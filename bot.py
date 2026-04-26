@@ -965,18 +965,18 @@ async def on_message(message):
 
 	# --- 🔄 КОМАНДА: !updatedemand (ПРИМУСОВЕ ОНОВЛЕННЯ GITHUB) ---
 	if message.content == "!updatedemand":
-    if not is_admin: 
-        return await message.channel.send("🚫 **Access Denied**")
+		if not is_admin: 
+			return await message.channel.send("🚫 **Access Denied**")
 
-    status_msg = await message.channel.send("⏳ **Step 1: Updating raw base `newsky-airports.txt` via API...**")
+		status_msg = await message.channel.send("⏳ **Step 1: Updating raw base `newsky-airports.txt` via API...**")
 
-    try:
-        await update_github_demand_task.coro()
-        await status_msg.edit(content="✅ **Base updated on GitHub!**")
-        await run_analytics_pipeline(message.channel)
-    except Exception as e:
-        await status_msg.edit(content=f"❌ **Error:** {e}")
-    return
+		try:
+			await update_github_demand_task.coro()
+			await status_msg.edit(content="✅ **Base updated on GitHub!**")
+			await run_analytics_pipeline(message.channel)
+		except Exception as e:
+			await status_msg.edit(content=f"❌ **Error:** {e}")
+		return
 # -------------------------------------------------------------
 
 # --- 🧪 КОМАНДА 1: !teststatspin (ЗІ ЗАКРІПЛЕННЯМ ТА ВІДКРІПЛЕННЯМ) ---
