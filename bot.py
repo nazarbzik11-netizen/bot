@@ -562,7 +562,7 @@ def get_landing_data(f, details_type):
             w_dir = float(weather.get("windDir", 0))
             w_spd = float(weather.get("windSpd", 0))
             
-            if w_dir == 0 and w_spd > 0: 
+            if round(w_dir) == 0 and w_spd > 0: 
                 w_dir = 360.0
                 
             comp = []
