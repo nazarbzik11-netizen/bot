@@ -534,7 +534,7 @@ def get_landing_data(f, details_type):
                 fpm = int(td.get("rate", 0))
                 g_force = float(td.get("gForce", 0))
                 weather = payload.get("weather", {})
-                hdg = float(td.get("location", {}).get("hdg", 0)) if "location" in td else 0.0
+                hdg = float(payload.get("location", {}).get("hdg", 0)) if "location" in payload else 0.0
                 found = True
                 break
 
@@ -987,7 +987,38 @@ async def on_message(message):
         return
     # -------------------------------------------------------------
 
-# --- 🧪 КОМАНДА 1: !teststatspin (ЗІ ЗАКРІПЛЕННЯМ ТА ВІДКРІПЛЕННЯМ) ---
+	# --- 🌪️ КОМАНДА: !testwind <ID> (ТЕСТОВЕ ПОВІДОМЛЕННЯ ПРО ПОСАДКУ) ---
+    if message.content.startswith("!testwind"):
+        if not is_admin: 
+            return await message.channel.send("🚫 **Access Denied**")
+        
+        parts = message.content.split()
+        if len(parts) < 2:
+            return await message.channel.send("⚠️ Usage: `!testwind <Flight_ID>`")
+        
+        fid = parts[1]
+        msg = await message.channel.send(f"⏳ **Fetching data for flight `{fid}`...**")
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                det = await fetch_api(session, f"/flight/{fid}")
+                
+                if not det or "flight" not in det:
+                    return await msg.edit(content=f"❌ **Error:** Flight `{fid}` not found in API.")
+                
+                f = det["flight"]
+                
+                # Відправляємо тестове повідомлення "Completed" у той же канал (або ПП)
+                await send_flight_message(message.channel, "Completed", f, "result")
+                
+                await msg.edit(content=f"✅ **Test message generated successfully!** (Stats were NOT updated)")
+                
+        except Exception as e:
+            await msg.edit(content=f"❌ **Internal error occurred:** {e}")
+        return
+    # -------------------------------------------------------------
+
+	# --- 🧪 КОМАНДА 1: !teststatspin (ЗІ ЗАКРІПЛЕННЯМ ТА ВІДКРІПЛЕННЯМ) ---
     if message.content == "!teststatspin":
         if not is_admin: return await message.channel.send("🚫 **Access Denied**")
         stats = load_weekly_stats()
