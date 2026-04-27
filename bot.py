@@ -515,6 +515,8 @@ def get_rating_square(rating):
 
 # --- FPM + G-Force + Wind Search ---
 def get_landing_data(f, details_type):
+    import math
+    
     if details_type == "test":
         fpm = -random.randint(50, 400)
         g = round(random.uniform(0.9, 1.8), 2)
@@ -522,6 +524,7 @@ def get_landing_data(f, details_type):
 
     fpm, g_force, found = 0, 0.0, False
     weather = {}
+    hdg = 0.0
 
     if "result" in f and "violations" in f["result"]:
         for v in f["result"]["violations"]:
@@ -531,6 +534,7 @@ def get_landing_data(f, details_type):
                 fpm = int(td.get("rate", 0))
                 g_force = float(td.get("gForce", 0))
                 weather = payload.get("weather", {})
+                hdg = float(td.get("location", {}).get("hdg", 0)) if "location" in td else 0.0
                 found = True
                 break
 
@@ -539,12 +543,14 @@ def get_landing_data(f, details_type):
         fpm = int(payload.get("rate", 0) or payload.get("touchDownRate", 0))
         g_force = float(payload.get("gForce", 0))
         weather = payload.get("weather", {})
+        hdg = float(payload.get("location", {}).get("hdg", 0)) if "location" in payload else 0.0
         found = True
 
     if not found:
         val = f.get("lastState", {}).get("speed", {}).get("touchDownRate")
         if val: 
             fpm = int(val)
+            hdg = float(f.get("lastState", {}).get("location", {}).get("hdg", 0))
             found = True
 
     if found and fpm != 0:
@@ -553,24 +559,26 @@ def get_landing_data(f, details_type):
         
         wind_str = ""
         if weather and "windDir" in weather:
-            w_dir = int(round(weather.get("windDir", 0)))
-            w_spd = int(round(weather.get("windSpd", 0)))
-            w_x = int(round(abs(weather.get("windX", 0))))
-            w_z = weather.get("windZ", 0)
+            w_dir = float(weather.get("windDir", 0))
+            w_spd = float(weather.get("windSpd", 0))
             
             if w_dir == 0 and w_spd > 0: 
-                w_dir = 360
+                w_dir = 360.0
                 
             comp = []
             
-            if w_x > 0:
-                comp.append(f"Crosswind: {w_x} kt")
+            angle_diff = math.radians(w_dir - hdg)
+            headwind_raw = w_spd * math.cos(angle_diff)
+            crosswind_raw = abs(w_spd * math.sin(angle_diff))
+            
+            if crosswind_raw >= 1.0:
+                comp.append(f"Crosswind: {int(round(crosswind_raw))} kt")
                 
-            if w_z <= 0.5:
-                comp.append(f"Tailwind: {int(round(abs(w_z)))} kt")
+            if headwind_raw <= -1.0:
+                comp.append(f"Tailwind: {int(round(abs(headwind_raw)))} kt")
                 
             extra_str = f" ({' | '.join(comp)})" if comp else ""
-            wind_str = f"\n<:wind:1482073151071326229> **{w_dir}° | {w_spd} kt**{extra_str}"
+            wind_str = f"\n<:wind:1482073151071326229> **{int(round(w_dir))}° | {int(round(w_spd))} kt**{extra_str}"
             
         return f"📉 **{fpm_val} fpm**{g_str}{wind_str}"
     
