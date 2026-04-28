@@ -928,6 +928,9 @@ async def on_message(message):
                 if total_found == 0:
                     return await status_msg.edit(content="✅ **За цей тиждень ще немає завершених рейсів.**")
                 
+                # 🔥 МАГІЯ ТУТ: Сортуємо строго за часом ЗАКРИТТЯ рейсу (updatedAt)
+                # Від тих, що закрилися першими, до тих, що закрилися щойно.
+                # Це повністю імітує роботу живого бота!
                 flights_list.sort(key=lambda x: x.get("updatedAt", ""))
                 
                 await status_msg.edit(content=f"⏳ **Знайдено {total_found} рейсів. Додаю в порядку їх закриття...**")
@@ -949,10 +952,13 @@ async def on_message(message):
                     if t.get("distance", 0) == 0 and t.get("time", 0) == 0:
                         continue
                         
-                    actual_time = f.get("depTime") or f.get("depTimeAct") or f.get("createdAt")
-                    correct_flight_week = get_iso_week(actual_time)
+                    sched_time = f.get("depTimeSched") or f.get("creationDate")
+                    week_tag = get_iso_week(sched_time)
                     
-                    update_weekly_stats(f, correct_flight_week)
+                    if week_tag != current_week_tag:
+                        continue
+                    
+                    update_weekly_stats(f, week_tag)
                     added_count += 1
                     
                     if added_count % 5 == 0:
@@ -1148,7 +1154,7 @@ async def on_message(message):
                 
                 f = det["flight"]
                 
-                sched_time = f.get("depTime") or f.get("createdAt")
+                sched_time = f.get("depTimeSched") or f.get("creationDate")
                 week_tag = get_iso_week(sched_time)
                 
                 update_weekly_stats(f, week_tag)
@@ -1180,7 +1186,7 @@ async def on_message(message):
                     return await msg.edit(content=f"❌ **Error:** Flight `{fid}` not found in API.")
                 
                 f = det["flight"]
-                sched_time = f.get("depTime") or f.get("createdAt")
+                sched_time = f.get("depTimeSched") or f.get("creationDate")
                 week_tag = get_iso_week(sched_time)
                 
                 stats = load_weekly_stats()
@@ -2199,7 +2205,7 @@ async def main_loop():
                             state[fid]["takeoff"] = True
                             
                             # 🔥 НОВЕ: Генерація мітки тижня під час зльоту 🔥
-                            sched_time = f.get("depTime") or f.get("createdAt")
+                            sched_time = f.get("depTimeSched") or f.get("creationDate")
                             state[fid]["week"] = get_iso_week(sched_time)
                             
                             if msg_id:
@@ -2238,8 +2244,7 @@ async def main_loop():
                             await send_flight_message(channel, "Completed", f, "result", reply_to_id=reply_id)
                             
                             # 🔥 НОВЕ: Збір статистики після посадки 🔥
-                            actual_time = f.get("depTime") or f.get("depTimeAct") or f.get("createdAt")
-                            week_tag = state.get(fid, {}).get("week") or get_iso_week(actual_time)
+                            week_tag = state.get(fid, {}).get("week") or get_iso_week()
                             update_weekly_stats(f, week_tag)
                             
                             state.setdefault(fid, {})["completed"] = True
