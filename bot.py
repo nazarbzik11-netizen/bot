@@ -952,7 +952,7 @@ async def on_message(message):
                     if t.get("distance", 0) == 0 and t.get("time", 0) == 0:
                         continue
                         
-                    sched_time = f.get("depTimeSched") or f.get("creationDate")
+                    sched_time = f.get("depTime") or f.get("createdAt")
                     week_tag = get_iso_week(sched_time)
                     
                     if week_tag != current_week_tag:
