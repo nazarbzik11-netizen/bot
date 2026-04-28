@@ -2448,7 +2448,7 @@ async def update_github_demand_task():
                 print(f"❌ {icao} - Помилка з'єднання: {e}")
             
             # Асинхронна пауза, щоб не блокувати бота
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.1)
 
         # 4. Формуємо новий текст і пушимо на GitHub
         if fresh_data:
