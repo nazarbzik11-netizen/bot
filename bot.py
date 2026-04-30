@@ -937,8 +937,8 @@ async def on_message(message):
                 
                 await status_msg.edit(content=f"⏳ **Знайдено {total_found} рейсів. Додаю в порядку їх закриття...**")
 
-				state = load_state() # Завантажуємо пам'ять бота
-                fid = "Невідомо" # 🔥 Запобіжник для відстеження ID
+                state = load_state()
+                fid = "Невідомо"
                 for raw_f in flights_list:
                     # Ігноруємо видалені та незакриті
                     if raw_f.get("deleted") or not raw_f.get("close"):
@@ -946,7 +946,7 @@ async def on_message(message):
                         
                     fid = str(raw_f.get("_id") or raw_f.get("id"))
                     
-                    # 🔥 НОВЕ: Перевіряємо, чи немає цього рейсу в чорному списку 🔥
+                    # 🔥 Перевіряємо, чи немає цього рейсу в чорному списку 🔥
                     if state.get(fid, {}).get("ignored"):
                         continue
                     
