@@ -36,6 +36,7 @@ START_TIME = datetime.now(timezone.utc)
 STATE_FILE = Path("/app/data/sent.json")
 STATUS_FILE = Path("/app/data/statuses.json")
 WEEKLY_STATS_FILE = Path("/app/data/weekly_stats.json")
+IGNORED_FILE = Path("/app/data/ignored.json")
 CHECK_INTERVAL = 30
 BASE_URL = "https://newsky.app/api/airline-api"
 AIRPORTS_DB_URL = "https://raw.githubusercontent.com/mwgg/Airports/master/airports.json"
@@ -63,6 +64,15 @@ def save_state(state):
     try:
         if len(state) > 100: state = dict(list(state.items())[-50:])
         STATE_FILE.write_text(json.dumps(state), encoding="utf-8")
+    except: pass
+
+def load_ignored():
+    if not IGNORED_FILE.exists(): return []
+    try: return json.loads(IGNORED_FILE.read_text(encoding="utf-8"))
+    except: return []
+
+def save_ignored(ignored_list):
+    try: IGNORED_FILE.write_text(json.dumps(ignored_list), encoding="utf-8")
     except: pass
 
 # 🔥 БЛОК ФУНКЦІЙ ДЛЯ СТАТИСТИКИ 🔥
@@ -937,17 +947,15 @@ async def on_message(message):
                 
                 await status_msg.edit(content=f"⏳ **Знайдено {total_found} рейсів. Додаю в порядку їх закриття...**")
 
-                state = load_state()
+                ignored_list = load_ignored()
                 fid = "Невідомо"
                 for raw_f in flights_list:
-                    # Ігноруємо видалені та незакриті
                     if raw_f.get("deleted") or not raw_f.get("close"):
                         continue
                         
                     fid = str(raw_f.get("_id") or raw_f.get("id"))
                     
-                    # 🔥 Перевіряємо, чи немає цього рейсу в чорному списку 🔥
-                    if state.get(fid, {}).get("ignored"):
+                    if fid in ignored_list:
                         continue
                     
                     det = await fetch_api(session, f"/flight/{fid}")
@@ -1150,11 +1158,12 @@ async def on_message(message):
             return await message.channel.send("⚠️ Usage: `!ignore <Flight_ID>`")
         
         fid = parts[1]
-        state = load_state()
-        state.setdefault(fid, {})["ignored"] = True
-        save_state(state)
+        ignored_list = load_ignored()
+        if fid not in ignored_list:
+            ignored_list.append(fid)
+            save_ignored(ignored_list)
         
-        await message.channel.send(f"🛑 **Рейс `{fid}` додано в ігнор-лист!**")
+        await message.channel.send(f"🛑 **Рейс `{fid}` назавжди додано в `ignored.json`!**")
         return
     # -------------------------------------------------------------
 
