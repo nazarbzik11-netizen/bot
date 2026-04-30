@@ -634,9 +634,11 @@ async def send_flight_message(channel, status, f, details_type="ongoing", reply_
     else:
         flight_url = f"https://newsky.app/map/{fid}"
 
-    # ---  ВИЗНАЧЕННЯ ТИПУ РЕЙСУ (СМАЙЛИК) ---
+	# ---  ВИЗНАЧЕННЯ ТИПУ РЕЙСУ (СМАЙЛИК) ---
     if f.get("schedule"):
         type_emoji = "<:sch:1496947924154847242>"
+    elif f.get("charter"):
+        type_emoji = "<:charter:1499317989483221063>"
     else:
         type_emoji = "<:free:1496947871604539392>"
 
