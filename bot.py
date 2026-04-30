@@ -894,16 +894,26 @@ async def on_message(message):
                 except:
                     pass
     
-    # --- 📥 КОМАНДА: !cache (СКАЧАТИ ФАЙЛ ПАМ'ЯТІ) ---
+    # --- 📥 КОМАНДА: !cache (СКАЧАТИ ВСІ ФАЙЛИ ПАМ'ЯТІ) ---
     if message.content == "!cache":
         if not is_admin: return await message.channel.send("🚫 **Access Denied**")
         
-        if not STATE_FILE.exists() or os.path.getsize(STATE_FILE) == 0:
-            return await message.channel.send("⚠️ **Cache file (sent.json) is empty or does not exist yet.**")
+        folder_path = Path("/app/data")
+        if not folder_path.exists():
+            return await message.channel.send("⚠️ **Дані ще не створені.**")
+            
+        files_to_send = []
+        # Проходимося по всіх файлах у папці /app/data
+        for file in folder_path.iterdir():
+            if file.is_file() and file.name.endswith(".json") and file.stat().st_size > 0:
+                files_to_send.append(discord.File(file))
+                
+        if not files_to_send:
+            return await message.channel.send("⚠️ **Файли кешу порожні або відсутні.**")
             
         await message.channel.send(
-            content="📂 **Bot Memory File (sent.json):**", 
-            file=discord.File(STATE_FILE)
+            content="📂 **Всі файли пам'яті бота:**", 
+            files=files_to_send[:10] # Відправляємо всі знайдені файли (до 10 шт.)
         )
         return
     # --------------------------------------------------------
