@@ -937,12 +937,17 @@ async def on_message(message):
                 
                 await status_msg.edit(content=f"⏳ **Знайдено {total_found} рейсів. Додаю в порядку їх закриття...**")
                 
+                state = load_state() # Завантажуємо пам'ять бота
                 for raw_f in flights_list:
                     # Ігноруємо видалені та незакриті
                     if raw_f.get("deleted") or not raw_f.get("close"):
                         continue
                         
                     fid = str(raw_f.get("_id") or raw_f.get("id"))
+                    
+                    # 🔥 НОВЕ: Перевіряємо, чи немає цього рейсу в чорному списку 🔥
+                    if state.get(fid, {}).get("ignored"):
+                        continue
                     
                     det = await fetch_api(session, f"/flight/{fid}")
                     if not det or "flight" not in det: 
@@ -1133,6 +1138,22 @@ async def on_message(message):
             # Якщо за 20 секунд ніхто нічого не написав
             await message.channel.send("⏳ **Time's up.** Deletion operation cancelled.")
             
+        return
+    # -------------------------------------------------------------
+
+	# --- 🛑 КОМАНДА: !ignore <ID> (ІГНОРУВАТИ БАГОВАНИЙ РЕЙС) ---
+    if message.content.startswith("!ignore"):
+        if not is_admin: return await message.channel.send("🚫 **Access Denied**")
+        parts = message.content.split()
+        if len(parts) < 2:
+            return await message.channel.send("⚠️ Usage: `!ignore <Flight_ID>`")
+        
+        fid = parts[1]
+        state = load_state()
+        state.setdefault(fid, {})["ignored"] = True
+        save_state(state)
+        
+        await message.channel.send(f"🛑 **Рейс `{fid}` додано в ігнор-лист!**")
         return
     # -------------------------------------------------------------
 
