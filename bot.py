@@ -938,6 +938,7 @@ async def on_message(message):
                 await status_msg.edit(content=f"⏳ **Знайдено {total_found} рейсів. Додаю в порядку їх закриття...**")
                 
                 state = load_state() # Завантажуємо пам'ять бота
+				fid = "Невідомо"
                 for raw_f in flights_list:
                     # Ігноруємо видалені та незакриті
                     if raw_f.get("deleted") or not raw_f.get("close"):
@@ -974,7 +975,7 @@ async def on_message(message):
                 await status_msg.edit(content=f"✅ **Синхронізація завершена!**\nДодано **{added_count}** рейсів у статистику так, якби бот був онлайн весь тиждень.")
                 
         except Exception as e:
-            await status_msg.edit(content=f"❌ **Сталася помилка:** {e}")
+            await status_msg.edit(content=f"❌ **Сталася помилка на рейсі `{fid}`:** {e}")
         return
     # -------------------------------------------------------------
 
